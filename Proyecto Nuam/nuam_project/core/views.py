@@ -95,8 +95,32 @@ def mantenedor_view(request):
                     # Como estamos en transaction.atomic(), la BD se mantiene limpia
                     return render(request, 'core/mantenedor.html', {'calificaciones': calificaciones, 'instrumentos': instrumentos})
 
-                # Asignar el resto de factores (F20 al F37)
-                # ... (Dupla C: deben completar la asignación del resto de factores aquí)
+                # PESTAÑA 3: RENTAS (F20 - F29)
+                nueva_calificacion.factor_20 = Decimal(request.POST.get('factor_20') or '0.0')
+                nueva_calificacion.factor_21 = Decimal(request.POST.get('factor_21') or '0.0')
+                nueva_calificacion.factor_22 = Decimal(request.POST.get('factor_22') or '0.0')
+                nueva_calificacion.factor_23 = Decimal(request.POST.get('factor_23') or '0.0')
+                nueva_calificacion.factor_24 = Decimal(request.POST.get('factor_24') or '0.0')
+                nueva_calificacion.factor_25 = Decimal(request.POST.get('factor_25') or '0.0')
+                nueva_calificacion.factor_26 = Decimal(request.POST.get('factor_26') or '0.0')
+                nueva_calificacion.factor_27 = Decimal(request.POST.get('factor_27') or '0.0')
+                nueva_calificacion.factor_28 = Decimal(request.POST.get('factor_28') or '0.0')
+                nueva_calificacion.factor_29 = Decimal(request.POST.get('factor_29') or '0.0')
+
+                # PESTAÑA 4: OTROS (F30 - F37)
+                nueva_calificacion.factor_30 = Decimal(request.POST.get('factor_30') or '0.0')
+                nueva_calificacion.factor_31 = Decimal(request.POST.get('factor_31') or '0.0')
+                nueva_calificacion.factor_32 = Decimal(request.POST.get('factor_32') or '0.0')
+                nueva_calificacion.factor_33 = Decimal(request.POST.get('factor_33') or '0.0')
+                nueva_calificacion.factor_34 = Decimal(request.POST.get('factor_34') or '0.0')
+                nueva_calificacion.factor_35 = Decimal(request.POST.get('factor_35') or '0.0')
+                nueva_calificacion.factor_36 = Decimal(request.POST.get('factor_36') or '0.0')
+                nueva_calificacion.factor_37 = Decimal(request.POST.get('factor_37') or '0.0')
+
+                # Asignar datos monetarios (Pestaña 1 - Generales)
+                # Ojo: Asegúrense de que en el HTML el input se llame "monto_total"
+                nueva_calificacion.monto_total = Decimal(request.POST.get('monto_total') or '0.0')
+                nueva_calificacion.descripcion = request.POST.get('descripcion', '')
                 
                 nueva_calificacion.save()
                 logger.info(f"Calificación creada por {request.user.username}: {nueva_calificacion.id}")
