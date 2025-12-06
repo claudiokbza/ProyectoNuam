@@ -9,6 +9,7 @@ from decimal import Decimal
 import logging
 from .models import CalificacionTributaria, Instrumento
 from .utils import procesar_carga_masiva
+from django.contrib.auth.forms import AuthenticationForm
 
 # Configuración básica del logger para LogAuditoria (Informe Punto 5.2)
 logger = logging.getLogger(__name__)
@@ -23,12 +24,19 @@ def mantenedor_redirect(request):
 
 
 def login_view(request):
-    # Usen el sistema de autenticación de Django aquí
-    # (Usar una vista simple para el proyecto es suficiente)
+    if request.user.is_authenticated:
+        return redirect('mantenedor')
+
     if request.method == 'POST':
-        # ... lógica de autenticación ...
-        pass
-    return render(request, 'core/login.html') # Crear este template es tarea pendiente
+        form = AuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            user = form.get_user()
+            login(request, user)
+            return redirect('mantenedor')
+        else:
+            messages.error(request, "Usuario o contraseña incorrectos.")
+    
+    return render(request, 'core/login.html')
 
 @login_required
 def logout_view(request):

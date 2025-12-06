@@ -118,7 +118,7 @@
                             <label class="form-label fw-bold text-nuam">Fecha Pago</label>
                             <input type="date" name="fecha_pago" class="form-control" required>
                         </div>
-                         <div class="col-md-4">
+                        <div class="col-md-4">
                             <label class="form-label fw-bold text-nuam">Descripción Evento</label>
                             <input type="text" name="descripcion" class="form-control" placeholder="Ej. Dividendo Provisorio">
                         </div>
@@ -227,6 +227,35 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" id="btn-guardar" class="btn text-white" style="background-color: #003366;">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalCargaMasiva" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{% url 'carga_masiva' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Carga Masiva (Excel)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Seleccione un archivo Excel (.xlsx) o CSV con el formato requerido.</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Archivo</label>
+                        <input type="file" name="archivo_excel" class="form-control" accept=".xlsx, .xls, .csv" required>
+                    </div>
+                    <div class="alert alert-warning small">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        Asegúrese de que el archivo tenga las columnas: <strong>Instrumento, Ejercicio, F08, F09...</strong>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Subir y Procesar</button>
                 </div>
             </form>
         </div>
