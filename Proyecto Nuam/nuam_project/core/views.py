@@ -8,6 +8,7 @@ from django.contrib import messages
 from decimal import Decimal
 import logging
 from .models import CalificacionTributaria, Instrumento
+from .utils import procesar_carga_masiva
 
 # Configuración básica del logger para LogAuditoria (Informe Punto 5.2)
 logger = logging.getLogger(__name__)
@@ -138,3 +139,25 @@ def mantenedor_view(request):
         'calificaciones': calificaciones,
         'instrumentos': instrumentos # Pasamos los instrumentos al template
     })
+
+# --- VISTA DE CARGA MASIVA (ARCHIVO EXCEL) ---
+@login_required
+def carga_masiva_view(request):
+    if request.method == 'POST' and request.FILES.get('archivo_excel'):
+        archivo = request.FILES['archivo_excel']
+        
+        # LLAMAMOS A LA FUNCIÓN DE PANDAS
+        guardados, errores = procesar_carga_masiva(archivo, request.user)
+        
+        # Feedback al usuario
+        if guardados > 0:
+            messages.success(request, f"Se cargaron {guardados} registros correctamente.")
+        
+        if errores:
+            # Mostrar errores (podrían ser muchos, mostramos los primeros 5)
+            for error in errores[:5]:
+                messages.error(request, error)
+            if len(errores) > 5:
+                messages.warning(request, f"Y {len(errores)-5} errores más.")
+                
+    return redirect('mantenedor')
