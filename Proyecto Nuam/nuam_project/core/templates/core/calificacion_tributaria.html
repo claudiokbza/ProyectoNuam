@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Calificación Tributaria | Instrumento</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f6f9;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #1f2937;
+            margin-bottom: 20px;
+        }
+
+        .contenedor {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            max-width: 800px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        }
+
+        form {
+            display: grid;
+            gap: 15px;
+        }
+
+        input, textarea, select, button {
+            padding: 10px;
+            font-size: 14px;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 35px;
+        }
+
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+        }
+
+        th {
+            background: #f1f5f9;
+        }
+
+        small {
+            display: block;
+            margin-top: 15px;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+
+<div class="contenedor">
+    <h1>Calificación Tributaria – Instrumento</h1>
+
+    <form method="POST">
+        {% csrf_token %}
+
+        <label>Cliente</label>
+        <input type="text" name="cliente" required>
+
+        <label>Instrumento</label>
+        <input type="text" name="instrumento" required>
+
+        <label>Calificación</label>
+        <select name="calificacion" required>
+            <option value="">Seleccionar</option>
+            <option value="A">A - Excelente</option>
+            <option value="B">B - Buena</option>
+            <option value="C">C - Regular</option>
+            <option value="D">D - Riesgosa</option>
+        </select>
+
+        <label>Observaciones</label>
+        <textarea name="observaciones" rows="3"></textarea>
+
+        <button type="submit">Guardar Calificación</button>
+    </form>
+
+    <small>Instrumento para evaluar situación tributaria de cada cliente.</small>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Cliente</th>
+                <th>Instrumento</th>
+                <th>Calificación</th>
+                <th>Fecha</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for registro in registros %}
+            <tr>
+                <td>{{ registro.cliente }}</td>
+                <td>{{ registro.instrumento }}</td>
+                <td>{{ registro.calificacion }}</td>
+                <td>{{ registro.fecha_creacion|date:"d/m/Y H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4">Sin datos guardados</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+
+</body>
+</html>

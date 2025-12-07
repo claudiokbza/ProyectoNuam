@@ -11,5 +11,5 @@ urlpatterns = [
     path('', include('core.urls')),
     
     # 2. Redirigir la raíz del sitio (/) a la página de login o al mantenedor
-    path('', mantenedor_redirect, name='home'), 
+    path('', mantenedor_redirect, name='home'),
 ]
