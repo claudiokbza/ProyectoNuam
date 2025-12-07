@@ -264,38 +264,66 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Seleccionamos SOLO los inputs que tienen la clase 'factor-check' (F08 a F19)
+        // Inputs F08 a F19
         const inputs = document.querySelectorAll('.factor-check');
         const displaySuma = document.getElementById('suma-total');
         const msgError = document.getElementById('msg-error');
         const btnGuardar = document.getElementById('btn-guardar');
 
+        const LIMITE = 1.0;
+        const TOL = 0.00000001; // tolerancia numérica
+
         function calcular() {
             let total = 0;
+
             inputs.forEach(input => {
-                // Si el campo está vacío, cuenta como 0
-                total += parseFloat(input.value) || 0;
+                // Reemplazo coma por punto por si el usuario escribe 0,6
+                const valor = parseFloat((input.value || '').replace(',', '.'));
+                if (!isNaN(valor)) {
+                    total += valor;
+                }
             });
-            
-            // Mostramos con 8 decimales
+
+            // Mostrar suma con 8 decimales
             displaySuma.textContent = total.toFixed(8);
 
-            if (total > 1.00000000) {
-                // Si se pasa de 1, mostramos error y bloqueamos botón
+            // Si la suma es mayor a 1.0 -> ERROR
+            if (total - LIMITE > TOL) {
                 msgError.classList.remove('d-none');
-                btnGuardar.disabled = true;
+                msgError.textContent = 'ERROR: la suma no puede ser mayor a 1.0';
+
+                // texto rojo
+                displaySuma.classList.remove('text-success');
                 displaySuma.classList.add('text-danger');
+
+                // bloquear botón
+                btnGuardar.disabled = true;
+                btnGuardar.classList.add('disabled');
+                btnGuardar.style.opacity = '0.5';
+                btnGuardar.style.cursor = 'not-allowed';
             } else {
-                // Si está bien, todo normal
                 msgError.classList.add('d-none');
-                btnGuardar.disabled = false;
+
+                // texto verde cuando está OK (<= 1.0)
                 displaySuma.classList.remove('text-danger');
+                displaySuma.classList.add('text-success');
+
+                // habilitar botón
+                btnGuardar.disabled = false;
+                btnGuardar.classList.remove('disabled');
+                btnGuardar.style.opacity = '1';
+                btnGuardar.style.cursor = 'pointer';
             }
         }
 
+        // Escuchar cambios en todos los factores
         inputs.forEach(input => {
             input.addEventListener('input', calcular);
         });
+
+        // Calcular una vez al cargar el modal/página
+        calcular();
     });
 </script>
+
 {% endblock %}
