@@ -1,0 +1,17 @@
+# .gitignore
+
+# Ignorar el entorno virtual (CRÍTICO)
+venv/
+env/
+.env
+
+# Ignorar base de datos local (Opcional, pero recomendado)
+db.sqlite3
+
+# Ignorar archivos compilados de Python
+__pycache__/
+*.pyc
+
+# Ignorar carpetas de IDEs
+.vscode/
+.idea/
