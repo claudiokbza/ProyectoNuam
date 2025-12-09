@@ -1,166 +1,151 @@
-# core/views.py
-
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, logout
-from django.db import transaction
+from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
+from django.db import transaction
 from decimal import Decimal
 import logging
 
-from .models import (
-    CalificacionTributaria,
-    Instrumento,
-    Factor,
-    CalificacionFactor,
-    Cliente
-)
+# Importamos tus modelos (Asegúrate de que en models.py sean estos nombres)
+from .models import CalificacionTributaria, Instrumento
 
+# Importamos la función de carga masiva (que creamos en el paso anterior)
 from .utils import procesar_carga_masiva
-from django.contrib.auth.forms import AuthenticationForm
 
-# Configuración básica del logger
 logger = logging.getLogger(__name__)
 
-# -------------------------
-# REDIRECCIÓN INICIAL
-# -------------------------
+# --- REDIRECCIÓN Y LOGIN ---
+
 def mantenedor_redirect(request):
     if request.user.is_authenticated:
         return redirect('mantenedor')
     return redirect('login')
 
-
-# -------------------------
-# LOGIN
-# -------------------------
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('mantenedor')
-
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
-            user = form.get_user()
-            login(request, user)
+            login(request, form.get_user())
             return redirect('mantenedor')
         else:
             messages.error(request, "Usuario o contraseña incorrectos.")
-
     return render(request, 'core/login.html')
 
-
-# -------------------------
-# LOGOUT
-# -------------------------
 @login_required
 def logout_view(request):
-    logger.info(f"Usuario {request.user.username} ha cerrado sesión.")
     logout(request)
-    messages.success(request, "Sesión cerrada correctamente.")
     return redirect('login')
 
+# --- VISTA PRINCIPAL (MANTENEDOR) ---
 
-# -------------------------
-# VISTA PRINCIPAL
-# -------------------------
 @login_required
 def mantenedor_view(request):
+    # 1. LOGICA DE ELIMINAR (POST desde el botón de abajo)
+    if request.method == 'POST' and 'accion_eliminar' in request.POST:
+        id_eliminar = request.POST.get('id_seleccionado')
+        if id_eliminar:
+            try:
+                # Seguridad R1: Solo borra si es del usuario
+                calif = CalificacionTributaria.objects.get(id=id_eliminar, usuario=request.user)
+                calif.delete()
+                messages.success(request, "Registro eliminado correctamente.")
+            except CalificacionTributaria.DoesNotExist:
+                messages.error(request, "No se encontró el registro o no tienes permiso.")
+        return redirect('mantenedor')
 
-    # Obtener datos existentes
-    calificaciones = CalificacionTributaria.objects.all().order_by('-fecha_creacion')
-    instrumentos = Instrumento.objects.all()
-    clientes = Cliente.objects.all()
-    factores = Factor.objects.all().order_by('order_index')
+    # 2. LOGICA DE FILTROS Y BÚSQUEDA
+    calificaciones = CalificacionTributaria.objects.filter(usuario=request.user).order_by('-created_at')
+    
+    # Capturamos filtros del GET
+    q_mercado = request.GET.get('q_mercado')
+    q_origen = request.GET.get('q_origen')
+    q_ejercicio = request.GET.get('q_ejercicio')
 
+    if q_mercado:
+        calificaciones = calificaciones.filter(instrumento__mercado__nombre__icontains=q_mercado)
+    if q_origen:
+        calificaciones = calificaciones.filter(origen__iexact=q_origen)
+    if q_ejercicio:
+        calificaciones = calificaciones.filter(ejercicio=q_ejercicio)
+
+    instrumentos = Instrumento.objects.all().order_by('codigo')
+
+    #POST: Guardar nueva calificación manual
     if request.method == 'POST':
-
         try:
             with transaction.atomic():
+                nueva = CalificacionTributaria()
+                nueva.usuario = request.user
+                
+                # --- CAMBIO: RECIBIR ID DIRECTO ---
+                inst_id = request.POST.get('instrumento') # Recibe el número (ID)
+                
+                if not inst_id:
+                    raise Exception("Debe seleccionar un instrumento de la lista.")
 
-                cliente_id = request.POST.get('cliente')
-                instrumento_id = request.POST.get('instrumento')
-                fecha_pago = request.POST.get('fecha_pago')
-                descripcion = request.POST.get('descripcion', '')
+                # Asignamos el ID directamente (Django lo entiende)
+                nueva.instrumento_id = inst_id
+                nueva.ejercicio = request.POST.get('ejercicio')
+                nueva.fecha_pago = request.POST.get('fecha_pago')
+                nueva.descripcion = request.POST.get('descripcion')
+                nueva.monto_total = Decimal(request.POST.get('monto_total') or 0)
+                nueva.origen = 'Corredor'  # Por defecto
 
-                nueva_calificacion = CalificacionTributaria.objects.create(
-                    cliente_id=cliente_id,
-                    instrumento_id=instrumento_id if instrumento_id else None,
-                    fecha_pago=fecha_pago,
-                    descripcion=descripcion,
-                    usuario_crea=None  # opcional, puedes enlazar después
-                )
+                # Capturar Factores (Del 08 al 37)
+                # Usamos un bucle para limpiar el código, o asignación directa
+                suma_creditos = Decimal(0)
+                
+                # Factores Crédito (F08-F19)
+                for i in range(8, 20):
+                    field_name = f'factor_{i:02d}' # factor_08, factor_09...
+                    valor = Decimal(request.POST.get(field_name) or 0)
+                    setattr(nueva, field_name, valor)
+                    suma_creditos += valor
+                
+                # Validación R2 (Suma <= 1.0)
+                if suma_creditos > Decimal('1.00000000'):
+                    messages.error(request, f"Error: La suma de factores (F08-F19) es {suma_creditos} y excede 1.0")
+                    # Retornamos sin guardar
+                    return render(request, 'core/mantenedor.html', {
+                        'calificaciones': calificaciones, 'instrumentos': instrumentos
+                    })
 
-                # -------- VALIDACIÓN FACTORES CRÍTICOS F08 - F19 --------
-                suma_credito = Decimal('0.0')
-                factores_criticos = [
-                    f.codigo_factor for f in Factor.objects.filter(
-                        codigo_factor__in=[f"F{str(i).zfill(2)}" for i in range(8, 20)]
-                    )
-                ]
+                # Factores Restantes (F20-F37)
+                for i in range(20, 38):
+                    field_name = f'factor_{i:02d}'
+                    valor = Decimal(request.POST.get(field_name) or 0)
+                    setattr(nueva, field_name, valor)
 
-                for codigo in factores_criticos:
-                    field_name = f"factor_{int(codigo[1:])}"
-                    valor = Decimal(request.POST.get(field_name) or '0.0')
-                    suma_credito += valor
-
-                if suma_credito > Decimal('1.0'):
-                    messages.error(
-                        request,
-                        f"⚠️ La suma de factores F08-F19 es {suma_credito} y no puede ser mayor a 1.0"
-                    )
-                    transaction.set_rollback(True)
-                    return redirect('mantenedor')
-
-                # -------- GUARDADO DE FACTORES --------
-                for factor in factores:
-                    field_name = f"factor_{factor.codigo_factor[1:]}"
-                    valor = request.POST.get(field_name)
-
-                    if valor:
-                        CalificacionFactor.objects.create(
-                            calificacion=nueva_calificacion,
-                            factor=factor,
-                            valor=Decimal(valor)
-                        )
-
-                messages.success(request, "✅ Calificación guardada con éxito.")
-                logger.info(f"Calificación creada por {request.user.username}")
+                nueva.save()
+                messages.success(request, "✅ Calificación guardada correctamente.")
+                return redirect('mantenedor')
 
         except Exception as e:
-            logger.error(f"❌ Error al guardar: {e}")
             messages.error(request, f"Error al guardar: {e}")
-
-        return redirect('mantenedor')
 
     return render(request, 'core/mantenedor.html', {
         'calificaciones': calificaciones,
-        'instrumentos': instrumentos,
-        'clientes': clientes,
-        'factores': factores
+        'instrumentos': instrumentos
     })
 
+# --- VISTA CARGA MASIVA ---
 
-# -------------------------
-# CARGA MASIVA
-# -------------------------
 @login_required
 def carga_masiva_view(request):
-
     if request.method == 'POST' and request.FILES.get('archivo_excel'):
-
         archivo = request.FILES['archivo_excel']
-
         guardados, errores = procesar_carga_masiva(archivo, request.user)
-
+        
         if guardados > 0:
-            messages.success(request, f"✅ Se cargaron {guardados} registros correctamente.")
-
+            messages.success(request, f"✅ Se cargaron {guardados} registros exitosamente.")
+        
         if errores:
-            for error in errores[:5]:
+            for error in errores[:3]: # Mostrar solo primeros 3 errores
                 messages.error(request, error)
-
-            if len(errores) > 5:
-                messages.warning(request, f"Y {len(errores)-5} errores más.")
-
+            if len(errores) > 3:
+                messages.warning(request, f"Y {len(errores)-3} errores más.")
+    
     return redirect('mantenedor')
