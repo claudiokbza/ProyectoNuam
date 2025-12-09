@@ -8,7 +8,6 @@ from django.http import JsonResponse
 from decimal import Decimal
 import logging
 
-# Importamos tus modelos
 from .models import CalificacionTributaria, Instrumento
 from .utils import procesar_carga_masiva
 
@@ -38,11 +37,15 @@ def logout_view(request):
     logout(request)
     return redirect('login')
 
-# --- AJAX: OBTENER DATOS PARA MODIFICAR (HDU 5) ---
+# --- AJAX: OBTENER DATOS PARA MODIFICAR ---
 @login_required
 def obtener_detalle_view(request, id):
     try:
-        calif = CalificacionTributaria.objects.get(id=id, usuario=request.user)
+        # NEW LOGIC: Si es Admin, puede pedir cualquier ID. Si no, solo los suyos.
+        if request.user.is_superuser:
+            calif = CalificacionTributaria.objects.get(id=id)
+        else:
+            calif = CalificacionTributaria.objects.get(id=id, usuario=request.user)
         
         data = {
             'id': calif.id,
@@ -103,7 +106,12 @@ def mantenedor_view(request):
             id_eliminar = request.POST.get('id_seleccionado')
             if id_eliminar:
                 try:
-                    obj = CalificacionTributaria.objects.get(id=id_eliminar, usuario=request.user)
+                    # NEW LOGIC: Admin borra todo, Usuario solo lo suyo
+                    if request.user.is_superuser:
+                        obj = CalificacionTributaria.objects.get(id=id_eliminar)
+                    else:
+                        obj = CalificacionTributaria.objects.get(id=id_eliminar, usuario=request.user)
+                    
                     obj.delete()
                     messages.success(request, "Registro eliminado correctamente.")
                 except CalificacionTributaria.DoesNotExist:
@@ -117,12 +125,17 @@ def mantenedor_view(request):
                 
                 if id_edicion:
                     # EDITAR
-                    nueva = get_object_or_404(CalificacionTributaria, id=id_edicion, usuario=request.user)
+                    # NEW LOGIC: Admin edita cualquiera
+                    if request.user.is_superuser:
+                        nueva = get_object_or_404(CalificacionTributaria, id=id_edicion)
+                    else:
+                        nueva = get_object_or_404(CalificacionTributaria, id=id_edicion, usuario=request.user)
+                    
                     msg_exito = "✅ Calificación modificada correctamente."
                 else:
                     # CREAR
                     nueva = CalificacionTributaria()
-                    nueva.usuario = request.user
+                    nueva.usuario = request.user # Al crear, el dueño siempre es quien lo crea
                     nueva.origen = 'Corredor'
                     msg_exito = "✅ Calificación creada correctamente."
 
@@ -162,10 +175,13 @@ def mantenedor_view(request):
             messages.error(request, f"Error al procesar: {e}")
             return redirect('mantenedor')
 
-    # 2. LOGICA GET (MOSTRAR DATOS Y FILTROS)
-    # IMPORTANTE: Este bloque está FUERA del "if request.method == 'POST'"
+    # 2. LOGICA GET (MOSTRAR DATOS)
     
-    calificaciones = CalificacionTributaria.objects.filter(usuario=request.user).order_by('-created_at')
+    # NEW LOGIC: Si es Admin, trae TODOS (.all). Si no, filtra por usuario.
+    if request.user.is_superuser:
+        calificaciones = CalificacionTributaria.objects.all().order_by('-created_at')
+    else:
+        calificaciones = CalificacionTributaria.objects.filter(usuario=request.user).order_by('-created_at')
     
     # Filtros
     q_mercado = request.GET.get('q_mercado')
@@ -181,7 +197,6 @@ def mantenedor_view(request):
 
     instrumentos = Instrumento.objects.all().order_by('codigo')
 
-    # ESTE ES EL RETURN QUE FALTABA (Ahora está alineado a la izquierda, fuera del IF)
     return render(request, 'core/mantenedor.html', {
         'calificaciones': calificaciones,
         'instrumentos': instrumentos
