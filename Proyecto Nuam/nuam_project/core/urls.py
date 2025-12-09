@@ -11,4 +11,5 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('carga-masiva/', views.carga_masiva_view, name='carga_masiva'),
+    path('obtener-detalle/<int:id>/', views.obtener_detalle_view, name='obtener_detalle'),
 ]

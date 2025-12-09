@@ -117,7 +117,7 @@
                 <button type="button" class="btn btn-primary" style="background-color: #003366;" onclick="validarYAbrirModal()">
                     <i class="bi bi-plus-lg"></i> Ingresar
                 </button>
-                <button type="button" class="btn btn-secondary" onclick="alert('Funcionalidad Demo: Modificar')">
+                <button type="button" class="btn btn-secondary" onclick="iniciarModificacion()">
                     <i class="bi bi-pencil"></i> Modificar
                 </button>
             </div>
@@ -135,7 +135,7 @@
             
             <form method="POST" id="form-ingreso-manual">
                 {% csrf_token %}
-                
+                <input type="hidden" name="id_edicion" id="input_id_edicion">
                 <div class="modal-body">
                     <div id="paso-1-datos">
                         <h6 class="text-nuam border-bottom pb-2 mb-3 fw-bold">Paso 1: Datos del Evento</h6>
@@ -432,24 +432,59 @@
     </div>
 </div>
 
-<div class="modal fade" id="modalCargaMasiva" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="{% url 'carga_masiva' %}" enctype="multipart/form-data">
+<div class="modal fade" id="modalCargaMasiva" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl"> <div class="modal-content">
+            <form method="POST" action="{% url 'carga_masiva' %}" enctype="multipart/form-data" id="form-carga-masiva">
                 {% csrf_token %}
+                
                 <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title">Carga Masiva (Excel)</h5>
+                    <h5 class="modal-title"><i class="bi bi-file-earmark-spreadsheet"></i> Carga Masiva de Factores</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
+                
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Seleccionar Archivo (.xlsx / .csv)</label>
-                        <input type="file" name="archivo_excel" class="form-control" accept=".xlsx, .xls, .csv" required>
+                    <div class="alert alert-light border-success d-flex align-items-center mb-3">
+                        <i class="bi bi-info-circle-fill text-success fs-4 me-3"></i>
+                        <div>
+                            <strong>Instrucciones:</strong>
+                            <ul class="mb-0 small text-secondary">
+                                <li>El archivo debe ser formato <strong>.CSV</strong> (separado por punto y coma ; o comas ,).</li>
+                                <li>Debe contener las columnas obligatorias: <strong>Instrumento, Ejercicio, F08...F37</strong>.</li>
+                                <li>El sistema validará el formato antes de permitir la carga.</li>
+                            </ul>
+                        </div>
                     </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">1. Seleccionar Archivo CSV</label>
+                        <input type="file" name="archivo_excel" id="input_archivo_csv" class="form-control" accept=".csv" required onchange="previsualizarCSV()">
+                        <div class="form-text text-muted">Seleccione el archivo para generar la vista previa.</div>
+                    </div>
+
+                    <div id="zona-preview" class="d-none">
+                        <h6 class="fw-bold text-success border-bottom pb-2">2. Vista Previa del Archivo</h6>
+                        <div class="table-responsive border rounded" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-hover table-striped mb-0 text-nowrap" id="tabla-preview">
+                                <thead class="table-success">
+                                    </thead>
+                                <tbody>
+                                    </tbody>
+                            </table>
+                        </div>
+                        <div id="info-registros" class="mt-2 text-end small fw-bold text-secondary"></div>
+                    </div>
+
+                    <div id="error-preview" class="alert alert-danger mt-3 d-none">
+                        <i class="bi bi-exclamation-triangle-fill"></i> <span id="msg-error-csv">Error de formato.</span>
+                    </div>
+
                 </div>
+                
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Procesar</button>
+                    <button type="submit" class="btn btn-success" id="btn-confirmar-carga" disabled>
+                        <i class="bi bi-cloud-upload"></i> Confirmar y Cargar
+                    </button>
                 </div>
             </form>
         </div>
@@ -567,5 +602,184 @@
             input.addEventListener('input', validarSumaCritica);
         });
     });
+
+    // --- LÓGICA DE MODIFICACIÓN (HDU 5) ---
+
+    function iniciarModificacion() {
+        // 1. Obtener ID seleccionado del radio button
+        const id = document.getElementById('input_id_seleccionado').value;
+        
+        if (!id) {
+            alert("⚠️ Por favor, seleccione una fila (círculo) para modificar.");
+            return;
+        }
+
+        // 2. Hacer petición AJAX a Django para obtener los datos
+        // Usamos fetch para llamar a la URL que creamos en el Paso 1
+        fetch(`/obtener-detalle/${id}/`)
+            .then(response => response.json())
+            .then(response => {
+                if (response.status === 'ok') {
+                    llenarModalConDatos(response.data);
+                } else {
+                    alert("Error al cargar datos: " + response.msg);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    function llenarModalConDatos(data) {
+        // 3. Rellenar los campos del Modal
+        
+        // ID Edición (Critico para que el backend sepa que es update)
+        document.getElementById('input_id_edicion').value = data.id;
+        
+        // Paso 1: Datos Básicos
+        document.getElementById('input_instrumento').value = data.instrumento_id; // Select usa ID
+        document.getElementById('modal_anio').value = data.ejercicio;
+        document.getElementById('input_fecha_pago').value = data.fecha_pago;
+        document.querySelector('input[name="monto_total"]').value = data.monto_total;
+        document.querySelector('textarea[name="descripcion"]').value = data.descripcion;
+        document.querySelector('input[name="secuencia"]').value = data.secuencia;
+        document.querySelector('input[name="factor_actualizacion"]').value = data.factor_actualizacion;
+        document.getElementById('checkIsfut').checked = data.es_isfut;
+
+        // Paso 2: Factores
+        // Llenamos los inputs de factores. Los montos los dejamos vacíos para obligar recálculo si quiere cambiar.
+        document.querySelector('input[name="factor_08"]').value = data.factor_08;
+        document.querySelector('input[name="factor_09"]').value = data.factor_09;
+        document.querySelector('input[name="factor_10"]').value = data.factor_10;
+        // ... Dupla B: Asegúrense de mapear el resto si es necesario ...
+        
+        // Forzamos actualización de validaciones visuales
+        validarSumaCritica();
+
+        // Cambiar Título del Modal
+        document.querySelector('.modal-title').innerText = "Modificar Calificación N° " + data.id;
+
+        // Reseteamos el Wizard al paso 1
+        volverAlPaso1();
+
+        // 4. Abrir Modal
+        new bootstrap.Modal(document.getElementById('modalCalificacion')).show();
+    }
+
+    // IMPORTANTE: Limpiar el ID de edición cuando se cierra el modal o se da a "Nuevo"
+    function validarYAbrirModal() {
+        const filtroMercado = document.getElementById('filtro_mercado');
+        const filtroAnio = document.getElementById('filtro_ejercicio');
+        if (!filtroMercado.value) {
+            alert("⚠️ Debe seleccionar un 'Tipo de Mercado' en los filtros.");
+            filtroMercado.focus();
+            filtroMercado.classList.add('border-danger');
+            return;
+        }
+        filtroMercado.classList.remove('border-danger');
+        document.getElementById('input_id_edicion').value = "";
+        document.querySelector('.modal-title').innerText = "Ingresar Nueva Calificación";
+        document.getElementById('form-ingreso-manual').reset(); // Limpia inputs
+        volverAlPaso1();
+        new bootstrap.Modal(document.getElementById('modalCalificacion')).show();
+    }
+
+    // --- LÓGICA DE PREVISUALIZACIÓN CSV MEJORADA ---
+    function previsualizarCSV() {
+        const input = document.getElementById('input_archivo_csv');
+        const zonaPreview = document.getElementById('zona-preview');
+        const tablaHead = document.querySelector('#tabla-preview thead');
+        const tablaBody = document.querySelector('#tabla-preview tbody');
+        const btnGuardar = document.getElementById('btn-confirmar-carga');
+        const infoRegistros = document.getElementById('info-registros');
+
+        // Resetear visual
+        zonaPreview.classList.add('d-none');
+        document.getElementById('error-preview').classList.add('d-none');
+        btnGuardar.disabled = true;
+        tablaHead.innerHTML = '';
+        tablaBody.innerHTML = '';
+
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            
+            reader.onload = function (e) {
+                const text = e.target.result;
+                const lineas = text.split('\n').filter(linea => linea.trim().length > 0);
+                
+                if (lineas.length < 2) {
+                    mostrarErrorCSV("El archivo está vacío o no tiene datos.");
+                    return;
+                }
+
+                const primeraLinea = lineas[0];
+
+                // 1. DETECCIÓN INTELIGENTE DE SEPARADOR
+                // Contamos qué aparece más en la primera línea: ¿Comas o Punto y Coma?
+                const cuentaComas = (primeraLinea.match(/,/g) || []).length;
+                const cuentaPuntoComa = (primeraLinea.match(/;/g) || []).length;
+                
+                let separador = ',';
+                if (cuentaPuntoComa > cuentaComas) {
+                    separador = ';';
+                }
+
+                console.log("Separador detectado:", separador === ';' ? 'Punto y Coma (;)' : 'Coma (,)');
+
+                // 2. LIMPIEZA DE ENCABEZADOS
+                // Quitamos comillas, espacios al inicio/final y caracteres invisibles
+                const encabezados = primeraLinea.split(separador).map(h => 
+                    h.trim().replace(/^"|"$/g, '').replace(/\r/g, '')
+                );
+
+                console.log("Encabezados leídos:", encabezados); // MIRA LA CONSOLA (F12) SI FALLA
+
+                // 3. VALIDACIÓN FLEXIBLE
+                // Buscamos "F08" (o "f08" o "Factor 08" o "F08 ")
+                const tieneInstrumento = encabezados.some(h => h.toUpperCase().includes('INSTRUMENTO'));
+                
+                // Buscamos F08 específicamente para asegurar que es un archivo de factores
+                const tieneF08 = encabezados.some(h => h.toUpperCase().includes('F08'));
+
+                if (!tieneInstrumento) {
+                    mostrarErrorCSV(`No se encontró la columna 'Instrumento'. Encabezados detectados: ${encabezados.join(', ')}`);
+                    return;
+                }
+                if (!tieneF08) {
+                    mostrarErrorCSV(`No se encontró la columna 'F08'. Revise si el archivo usa ';' o ','. Encabezados: ${encabezados.join(', ')}`);
+                    return;
+                }
+
+                // 4. DIBUJAR TABLA
+                let htmlHead = '<tr>';
+                encabezados.forEach(enc => htmlHead += `<th>${enc}</th>`);
+                htmlHead += '</tr>';
+                tablaHead.innerHTML = htmlHead;
+
+                let filasMostrar = Math.min(lineas.length - 1, 5);
+                for (let i = 1; i <= filasMostrar; i++) {
+                    const celdas = lineas[i].split(separador);
+                    let htmlRow = '<tr>';
+                    celdas.forEach(celda => {
+                        htmlRow += `<td>${celda.trim().replace(/^"|"$/g, '')}</td>`;
+                    });
+                    htmlRow += '</tr>';
+                    tablaBody.innerHTML += htmlRow;
+                }
+
+                zonaPreview.classList.remove('d-none');
+                btnGuardar.disabled = false;
+                infoRegistros.innerText = `Vista previa de las primeras ${filasMostrar} filas.`;
+            };
+
+            reader.readAsText(input.files[0], "ISO-8859-1");
+        }
+    }
+
+    function mostrarErrorCSV(mensaje) {
+        const divError = document.getElementById('error-preview');
+        document.getElementById('msg-error-csv').innerText = mensaje;
+        divError.classList.remove('d-none');
+        document.getElementById('input_archivo_csv').value = "";
+    }
+
 </script>
 {% endblock %}
