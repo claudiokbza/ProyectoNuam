@@ -2,8 +2,9 @@ import pandas as pd
 from decimal import Decimal
 from django.db import transaction
 from .models import CalificacionTributaria, Instrumento
+import csv
 
-def procesar_carga_masiva(archivo_excel, usuario_actual):
+def procesar_carga_masiva(archivo, usuario_actual):
     """
     Lee un archivo Excel/CSV y guarda las calificaciones en la BD.
     Retorna: (total_procesados, lista_de_errores)
@@ -12,82 +13,91 @@ def procesar_carga_masiva(archivo_excel, usuario_actual):
     guardados = 0
 
     try:
-        # 1. LEER EL ARCHIVO CON PANDAS
-        # Detectamos si es CSV o Excel por la extensión (nombre del archivo)
-        if archivo_excel.name.endswith('.csv'):
-            df = pd.read_csv(archivo_excel)
+        # 1. LEER EL ARCHIVO (SOPORTE PARA EXCEL Y CSV CHILENO)
+        if archivo.name.endswith('.csv'):
+            # Truco para detectar si es coma (,) o punto y coma (;)
+            # Leemos los primeros 1024 bytes para olfatear el formato
+            sample = archivo.read(1024).decode('iso-8859-1') 
+            archivo.seek(0) # Rebobinar el archivo al principio
+            
+            # Detectar separador
+            dialect = csv.Sniffer().sniff(sample)
+            
+            # Leemos con Pandas usando el separador detectado
+            df = pd.read_csv(archivo, sep=dialect.delimiter, encoding='iso-8859-1')
         else:
-            # openpyxl es necesario para leer xlsx
-            df = pd.read_excel(archivo_excel, engine='openpyxl')
+            # Es Excel (.xlsx)
+            df = pd.read_excel(archivo, engine='openpyxl')
 
-        # 2. LIMPIEZA DE DATOS (MÁGICO)
-        # Reemplazar celdas vacías (NaN) por 0, porque la BD no acepta vacíos en factores
-        df = df.fillna(0)
+        # 2. LIMPIEZA DE DATOS
+        df = df.fillna(0) # Rellenar vacíos con 0
+        
+        # Normalizar nombres de columnas (Quitar espacios extra y pasar a mayúsculas para buscar mejor)
+        # Esto ayuda si el CSV dice " Instrumento " en lugar de "Instrumento"
+        df.columns = df.columns.str.strip()
 
         # 3. PROCESAR FILA POR FILA
-        # Usamos transaction.atomic para que si hay un error GRAVE, no se guarde nada a medias.
-        # Pero aquí lo usaremos por fila para intentar guardar lo que sirva.
-        
         for index, row in df.iterrows():
-            fila_numero = index + 2 # +2 porque index arranca en 0 y el Excel tiene encabezado
+            fila_numero = index + 2 
             
             try:
                 with transaction.atomic():
-                    # A. BUSCAR EL INSTRUMENTO (FK)
-                    # Asumimos que en el Excel la columna se llama "NEMO" o "Instrumento"
-                    codigo_instrumento = str(row.get('Instrumento', '')).strip()
+                    # A. BUSCAR INSTRUMENTO
+                    # Intentamos leer 'Instrumento' o 'Nemo'
+                    codigo_instrumento = str(row.get('Instrumento') or row.get('Nemo', '')).strip()
                     
-                    # Buscamos en la BD. Si no existe, lanzamos error.
+                    if not codigo_instrumento:
+                        continue # Saltar filas vacías
+
                     try:
                         inst_obj = Instrumento.objects.get(codigo__iexact=codigo_instrumento)
                     except Instrumento.DoesNotExist:
                         raise Exception(f"El instrumento '{codigo_instrumento}' no existe en el sistema.")
 
-                    # B. PREPARAR EL OBJETO
-                    nueva_calif = CalificacionTributaria()
-                    nueva_calif.usuario = usuario_actual # Aislamiento R1
-                    nueva_calif.instrumento = inst_obj
-                    nueva_calif.origen = 'Carga Masiva'
+                    # B. PREPARAR OBJETO
+                    nueva = CalificacionTributaria()
+                    nueva.usuario = usuario_actual
+                    nueva.instrumento = inst_obj
+                    nueva.origen = 'Carga Masiva' # HDU 6
                     
-                    # C. LEER DATOS BÁSICOS
-                    nueva_calif.ejercicio = int(row.get('Ejercicio', 2025))
-                    nueva_calif.fecha_pago = row.get('Fecha Pago') # Debe venir en formato fecha correcto
-                    nueva_calif.monto_total = Decimal(str(row.get('Monto Total', 0)))
+                    # C. DATOS BASICOS
+                    nueva.ejercicio = int(row.get('Ejercicio', 2025))
+                    # Intentar leer fecha, si falla dejar None o fecha actual
+                    nueva.fecha_pago = row.get('Fecha Pago') 
+                    nueva.monto_total = Decimal(str(row.get('Monto Total', 0)).replace(',', '.')) # Reemplazar coma decimal por punto
 
-                    # D. LEER FACTORES (DEL 08 AL 37)
-                    # Esto es repetitivo pero seguro. Leemos la columna "F08", "F09", etc.
+                    # D. LEER FACTORES (F08 - F37)
+                    # El CSV puede tener "0,123" (español) o "0.123" (inglés). Arreglamos eso.
+                    
                     suma_creditos = Decimal(0)
-                    
-                    # Bucle para leer F08 hasta F19 (Validación Crítica)
-                    for i in range(8, 20): 
-                        col_name = f"F{i:02d}" # Genera "F08", "F09"...
-                        valor = Decimal(str(row.get(col_name, 0))) # Convierte a Decimal seguro
+
+                    for i in range(8, 38):
+                        col_name = f"F{i:02d}" # Busca "F08", "F09"...
                         
-                        # Asignamos dinámicamente: nueva_calif.factor_08 = valor
-                        setattr(nueva_calif, f"factor_{i:02d}", valor)
+                        # Obtener valor, convertir a string, cambiar coma por punto (para Python)
+                        val_str = str(row.get(col_name, 0)).replace(',', '.')
+                        try:
+                            valor = Decimal(val_str)
+                        except:
+                            valor = Decimal(0)
+
+                        setattr(nueva, f"factor_{i:02d}", valor)
                         
-                        suma_creditos += valor
+                        # Validar suma F08-F16 (HDU 6)
+                        if 8 <= i <= 16:
+                            suma_creditos += valor
 
-                    # E. VALIDACIÓN DE REGLA DE NEGOCIO (R2)
-                    if suma_creditos > Decimal('1.00000000'):
-                        raise Exception(f"La suma de factores F08-F19 da {suma_creditos}. Máximo permitido 1.0.")
+                    # E. VALIDACIÓN DE REGLA DE NEGOCIO
+                    if suma_creditos > Decimal('1.00000001'):
+                        raise Exception(f"Suma de factores F08-F16 es {suma_creditos} (mayor a 1.0)")
 
-                    # F. LEER RESTO DE FACTORES (F20 - F37)
-                    for i in range(20, 38):
-                        col_name = f"F{i:02d}"
-                        valor = Decimal(str(row.get(col_name, 0)))
-                        setattr(nueva_calif, f"factor_{i:02d}", valor)
-
-                    # G. GUARDAR
-                    nueva_calif.save()
+                    nueva.save()
                     guardados += 1
 
             except Exception as e:
-                # Si falla una fila, la anotamos en errores pero seguimos con la siguiente
-                errores.append(f"Fila {fila_numero}: {str(e)}")
+                errores.append(f"Fila {fila_numero} ({codigo_instrumento}): {str(e)}")
 
     except Exception as e:
-        # Error general al abrir el archivo (ej: formato corrupto)
-        errores.append(f"Error crítico de archivo: {str(e)}")
+        errores.append(f"Error crítico al leer archivo: {str(e)}")
 
     return guardados, errores

@@ -2,260 +2,493 @@
 
 {% block content %}
 <div class="card shadow-sm border-0">
-    <div class="card-header bg-white py-3">
-        <div class="d-flex justify-content-between align-items-center">
-            <h5 class="m-0 text-nuam fw-bold"><i class="bi bi-table"></i> Calificaciones Tributarias</h5>
-            
-            <div class="d-flex gap-2">
-                <button type="button" class="btn btn-nuam" data-bs-toggle="modal" data-bs-target="#modalCalificacion">
-                    <i class="bi bi-plus-lg"></i> Nuevo Registro
+    
+    <div class="card-header bg-light py-4 border-bottom">
+        <h5 class="mb-3 text-nuam fw-bold" style="color: #003366;">
+            <i class="bi bi-filter-circle"></i> Buscador de Calificaciones Tributarias
+        </h5>
+        
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-secondary">Tipo de Mercado (*)</label>
+                <select name="q_mercado" id="filtro_mercado" class="form-select">
+                    <option value="">-- Seleccione Mercado --</option>
+                    <option value="Acciones">Acciones</option>
+                    <option value="CFI">CFI</option>
+                    <option value="Fondos Mutuos">Fondos Mutuos</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-secondary">Origen Información</label>
+                <select name="q_origen" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="Corredor">Corredor</option>
+                    <option value="Entidad Prestadora del Servicio">Entidad Prestadora del Servicio</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold small text-secondary">Periodo (Año)</label>
+                <select name="q_ejercicio" id="filtro_ejercicio" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="2024">2024</option>
+                    <option value="2025" selected>2025</option>
+                    <option value="2026">2026</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary px-4" style="background-color: #003366; border-color: #003366;">
+                    <i class="bi bi-search"></i> Buscar
                 </button>
-                
-                <a href="#" class="btn btn-success text-white">
-                    <i class="bi bi-file-earmark-excel"></i> Carga Masiva
+                <a href="{% url 'mantenedor' %}" class="btn btn-outline-secondary px-4">
+                    <i class="bi bi-eraser"></i> Limpiar
                 </a>
             </div>
-        </div>
+        </form>
     </div>
-    
-    <div class="card-body p-0">
-        <div class="bg-light p-3 border-bottom">
-            <form class="row g-2 align-items-center">
-                <div class="col-auto">
-                    <select class="form-select form-select-sm">
-                        <option selected>Todos los Mercados</option>
-                        <option>Acciones</option>
-                        <option>CFI</option>
-                    </select>
-                </div>
-                <div class="col-auto">
-                    <input type="text" class="form-control form-control-sm" placeholder="Buscar Instrumento...">
-                </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-secondary btn-sm">Buscar</button>
-                </div>
-            </form>
+
+    <form method="POST" id="form-acciones-tabla">
+        {% csrf_token %}
+        <input type="hidden" name="id_seleccionado" id="input_id_seleccionado">
+        
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-hover table-bordered table-striped mb-0 text-nowrap align-middle" style="font-size: 0.85rem;">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="text-center" style="width: 50px; position: sticky; left: 0; z-index: 20;">Sel.</th>
+                            <th style="position: sticky; left: 50px; z-index: 20;">Ejercicio</th>
+                            <th style="position: sticky; left: 120px; z-index: 20;">Instrumento</th>
+                            {% if user.is_superuser %} <th>Usuario</th> {% endif %}
+                            <th>Fecha Pago</th>
+                            <th>Monto Total ($)</th>
+                            <th>Descripción</th>
+                            <th>Secuencia</th>
+                            <th>ISFUT</th>
+                            <th>Origen</th>
+                            <th>Fac. Act.</th>
+                            <th title="Con Crédito IDPC">F08</th>
+                            <th>F09</th><th>F10</th><th>F11</th><th>F12</th><th>F13</th><th>F14</th><th>F15</th>
+                            <th>F16</th><th>F17</th><th>F18</th><th>F19</th><th>F20</th><th>F21</th><th>F22</th>
+                            <th>F23</th><th>F24</th><th>F25</th><th>F26</th><th>F27</th><th>F28</th><th>F29</th>
+                            <th>F30</th><th>F31</th><th>F32</th><th>F33</th><th>F34</th><th>F35</th><th>F36</th><th>F37</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in calificaciones %}
+                        <tr onclick="seleccionarFila(this, {{ c.id }})">
+                            <td class="text-center" style="position: sticky; left: 0; background-color: inherit; z-index: 10;">
+                                <input type="radio" name="radio_seleccion" value="{{ c.id }}" class="form-check-input">
+                            </td>
+                            <td style="position: sticky; left: 50px; background-color: inherit; z-index: 10;">{{ c.ejercicio }}</td>
+                            <td style="position: sticky; left: 120px; background-color: inherit; z-index: 10;" class="fw-bold">{{ c.instrumento.codigo }}</td>
+                            {% if user.is_superuser %} 
+                                <td><span class="badge bg-warning text-dark">{{ c.usuario.username }}</span></td> 
+                            {% endif %}
+                            <td>{{ c.fecha_pago|date:"d/m/Y" }}</td>
+                            <td>${{ c.monto_total }}</td>
+                            <td>{{ c.descripcion|default:"-" }}</td>
+                            <td>{{ c.secuencia }}</td>
+                            <td class="text-center">{% if c.es_isfut %}SI{% else %}-{% endif %}</td>
+                            <td>{{ c.origen }}</td>
+                            <td>{{ c.factor_actualizacion }}</td>
+                            <td>{{ c.factor_08 }}</td><td>{{ c.factor_09 }}</td><td>{{ c.factor_10 }}</td>
+                            <td>{{ c.factor_11 }}</td><td>{{ c.factor_12 }}</td><td>{{ c.factor_13 }}</td>
+                            <td>{{ c.factor_14 }}</td><td>{{ c.factor_15 }}</td><td>{{ c.factor_16 }}</td>
+                            <td>{{ c.factor_17 }}</td><td>{{ c.factor_18 }}</td><td>{{ c.factor_19 }}</td>
+                            <td>{{ c.factor_20 }}</td><td>{{ c.factor_21 }}</td><td>{{ c.factor_22 }}</td>
+                            <td>{{ c.factor_23 }}</td><td>{{ c.factor_24 }}</td><td>{{ c.factor_25 }}</td>
+                            <td>{{ c.factor_26 }}</td><td>{{ c.factor_27 }}</td><td>{{ c.factor_28 }}</td>
+                            <td>{{ c.factor_29 }}</td><td>{{ c.factor_30 }}</td><td>{{ c.factor_31 }}</td>
+                            <td>{{ c.factor_32 }}</td><td>{{ c.factor_33 }}</td><td>{{ c.factor_34 }}</td>
+                            <td>{{ c.factor_35 }}</td><td>{{ c.factor_36 }}</td><td>{{ c.factor_37 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="45" class="text-center py-5 text-muted">No se encontraron registros.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
-            <table class="table table-hover table-striped mb-0 text-nowrap align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th style="position: sticky; left: 0; z-index: 10; background-color: #343a40;">Instrumento</th>
-                        <th style="position: sticky; left: 0; z-index: 10; background-color: #343a40;">Ejercicio</th>
-                        
-                        <th>Monto Total</th>
-                        <th>F08 (Crédito IDPC)</th>
-                        <th>F09 (Acum. 2016)</th>
-                        <th>F10 (IDPC Vol.)</th>
-                        <th>F11 (Sin Der.)</th>
-                        <th>F12 (Rentas RAP)</th>
-                        <th>F37 (Otros)</th>
-                        <th>Origen</th>
-                        <th class="text-end">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for c in calificaciones %}
-                    <tr>
-                        <td style="position: sticky; left: 0; background-color: white; z-index: 5;" class="fw-bold">{{ c.instrumento }}</td>
-                        <td style="position: sticky; left: 0; background-color: white; z-index: 5;">{{ c.ejercicio }}</td>
-                        
-                        <td>${{ c.monto_total }}</td>
-                        <td>{{ c.factor_08 }}</td>
-                        <td>{{ c.factor_09 }}</td>
-                        <td>{{ c.factor_10 }}</td>
-                        <td>{{ c.factor_11 }}</td>
-                        <td>{{ c.factor_12 }}</td>
-                        
-                        <td>{{ c.factor_37 }}</td>
-                        <td><span class="badge bg-info text-dark">{{ c.origen }}</span></td>
-                        <td class="text-end">
-                            <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></button>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="12" class="text-center py-4 text-muted">
-                            No hay calificaciones registradas para este usuario.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="card-footer bg-white py-3 border-top">
+            <div class="d-flex justify-content-end gap-2">
+                <button type="submit" name="accion_eliminar" class="btn btn-danger" onclick="return confirmarEliminar()">
+                    <i class="bi bi-trash"></i> Eliminar
+                </button>
+                <button type="button" class="btn btn-success text-white" data-bs-toggle="modal" data-bs-target="#modalCargaMasiva">
+                    <i class="bi bi-file-earmark-excel"></i> Carga Masiva
+                </button>
+                <button type="button" class="btn btn-primary" style="background-color: #003366;" onclick="validarYAbrirModal()">
+                    <i class="bi bi-plus-lg"></i> Ingresar
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="iniciarModificacion()">
+                    <i class="bi bi-pencil"></i> Modificar
+                </button>
+            </div>
         </div>
-    </div>
+    </form>
 </div>
 
-<div class="modal fade" id="modalCalificacion" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="modalCalificacion" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
+            <div class="modal-header text-white" style="background-color: #003366;">
+                <h5 class="modal-title">Ingresar Nueva Calificación</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
             
-            <form method="POST"> 
-                
-                {% csrf_token %} <div class="modal-header text-white" style="background-color: #003366;">
-                    <h5 class="modal-title text-white">Nueva Calificación Tributaria</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                
+            <form method="POST" id="form-ingreso-manual">
+                {% csrf_token %}
+                <input type="hidden" name="id_edicion" id="input_id_edicion">
                 <div class="modal-body">
-                    
-                    <div class="row g-3 mb-4 p-3 bg-light rounded border">
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold text-nuam">Instrumento</label>
-                            <select name="instrumento" class="form-select" required>
-                                <option value="">Seleccione...</option>
-                                {% for inst in instrumentos %}
-                                    <option value="{{ inst.id }}">{{ inst.codigo }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label fw-bold text-nuam">Ejercicio</label>
-                            <input type="number" name="ejercicio" class="form-control" value="2025" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold text-nuam">Fecha Pago</label>
-                            <input type="date" name="fecha_pago" class="form-control" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold text-nuam">Descripción Evento</label>
-                            <input type="text" name="descripcion" class="form-control" placeholder="Ej. Dividendo Provisorio">
-                        </div>
-                    </div>
-
-                    <ul class="nav nav-tabs mb-3" id="myTab" role="tablist">
-                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-generales" type="button">1. Montos</button></li>
-                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-creditos" type="button">2. Créditos (F08-F19)</button></li>
-                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-rentas" type="button">3. Rentas (F20-F29)</button></li>
-                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-otros" type="button">4. Otros (F30-F37)</button></li>
-                    </ul>
-
-                    <div class="tab-content">
-                        
-                        <div class="tab-pane fade show active" id="tab-generales">
-                            <div class="row g-3">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">Monto Total ($)</label>
-                                    <input type="number" step="0.01" name="monto_total" class="form-control" placeholder="0.00">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label text-secondary">Valor Histórico</label>
-                                    <input type="number" step="0.01" name="valor_historico" class="form-control" placeholder="0.00">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label text-secondary">Factor Actualización</label>
-                                    <input type="number" step="0.000001" name="factor_actualizacion" class="form-control" value="1.0">
-                                </div>
+                    <div id="paso-1-datos">
+                        <h6 class="text-nuam border-bottom pb-2 mb-3 fw-bold">Paso 1: Datos del Evento</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Mercado</label>
+                                <input type="text" id="modal_mercado" class="form-control bg-light" readonly>
                             </div>
-                        </div>
-
-                        <div class="tab-pane fade" id="tab-creditos">
-                            <div class="alert alert-light border small text-muted">
-                                <i class="bi bi-info-circle"></i> La suma de F08 a F19 debe ser <strong><= 1.0</strong>.
+                            <div class="col-md-2">
+                                <label class="form-label fw-bold">Año</label>
+                                <input type="number" name="ejercicio" id="modal_anio" class="form-control bg-light" readonly>
                             </div>
                             
-                            <div class="row g-3">
-                                <div class="col-md-4">
-                                    <label class="form-label small text-nuam">F08 (Con Crédito IDPC)</label>
-                                    <input type="number" step="0.00000001" name="factor_08" class="form-control factor-check" placeholder="0.00000000">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small text-nuam">F09 (Acum. 2016)</label>
-                                    <input type="number" step="0.00000001" name="factor_09" class="form-control factor-check" placeholder="0.00000000">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small text-nuam">F10 (IDPC Voluntario)</label>
-                                    <input type="number" step="0.00000001" name="factor_10" class="form-control factor-check" placeholder="0.00000000">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small text-secondary">F11 (Sin Der. Crédito)</label>
-                                    <input type="number" step="0.00000001" name="factor_11" class="form-control factor-check" placeholder="0.00000000">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small text-secondary">F12 (Rentas RAP)</label>
-                                    <input type="number" step="0.00000001" name="factor_12" class="form-control factor-check" placeholder="0.00000000">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small text-secondary">F13 (Otras Rentas)</label>
-                                    <input type="number" step="0.00000001" name="factor_13" class="form-control factor-check" placeholder="0.00000000">
-                                </div>
-                                <div class="col-md-4"><label class="form-label small text-secondary">F14</label><input type="number" step="0.00000001" name="factor_14" class="form-control factor-check"></div>
-                                <div class="col-md-4"><label class="form-label small text-secondary">F15</label><input type="number" step="0.00000001" name="factor_15" class="form-control factor-check"></div>
-                                <div class="col-md-4"><label class="form-label small text-secondary">F16</label><input type="number" step="0.00000001" name="factor_16" class="form-control factor-check"></div>
-                                <div class="col-md-4"><label class="form-label small text-secondary">F17</label><input type="number" step="0.00000001" name="factor_17" class="form-control factor-check"></div>
-                                <div class="col-md-4"><label class="form-label small text-secondary">F18</label><input type="number" step="0.00000001" name="factor_18" class="form-control factor-check"></div>
-                                <div class="col-md-4"><label class="form-label small text-secondary">F19</label><input type="number" step="0.00000001" name="factor_19" class="form-control factor-check"></div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-primary">Instrumento (*)</label>
+                                <select name="instrumento" id="input_instrumento" class="form-select" required>
+                                    <option value="">-- Seleccione Instrumento --</option>
+                                    {% for inst in instrumentos %}
+                                        <option value="{{ inst.id }}">{{ inst.codigo }} - {{ inst.nombre }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
 
-                            <div class="mt-3 p-2 bg-light border rounded text-end">
-                                <strong>Suma Actual: <span id="suma-total">0.00000000</span> / 1.0</strong>
-                                <span id="msg-error" class="text-danger fw-bold d-none ms-2">ERROR: > 1.0</span>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Secuencia Evento</label>
+                                <input type="number" name="secuencia" class="form-control" min="10001" placeholder="Ej: 10001" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold text-success">Dividendo / Monto Total ($)</label>
+                                <input type="number" step="0.01" name="monto_total" class="form-control border-success" value="0" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold text-primary">Fecha Pago (*)</label>
+                                <input type="date" name="fecha_pago" id="input_fecha_pago" class="form-control" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Valor Histórico ($)</label>
+                                <input type="number" step="0.01" name="valor_historico" class="form-control" value="0">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Factor Actualización</label>
+                                <input type="number" step="0.000001" name="factor_actualizacion" class="form-control" value="0.000000">
+                            </div>
+                            <div class="col-md-4 d-flex align-items-center pt-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="es_isfut" id="checkIsfut">
+                                    <label class="form-check-label fw-bold" for="checkIsfut">¿Acogido a ISFUT?</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Descripción</label>
+                                <textarea name="descripcion" class="form-control" rows="2"></textarea>
+                            </div>
+                        </div>
+                        <div class="text-end mt-4 border-top pt-3">
+                            <button type="button" class="btn btn-primary px-5" style="background-color: #003366;" onclick="pasarAlPaso2()">
+                                OK / Siguiente <i class="bi bi-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="paso-2-factores" class="d-none animate__animated animate__fadeIn">
+                        
+                        <div class="card mb-3 border-primary bg-light">
+                            <div class="card-body py-2">
+                                <div class="row text-center small">
+                                    <div class="col-3 border-end">Inst: <strong id="resumen_instrumento">---</strong></div>
+                                    <div class="col-2 border-end">Año: <strong id="resumen_anio_txt">---</strong></div>
+                                    <div class="col-3 border-end">Fecha: <strong id="resumen_fecha">---</strong></div>
+                                    <div class="col-4">Monto Total: $<strong id="resumen_monto">---</strong></div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="tab-pane fade" id="tab-rentas">
-                            <div class="row g-3">
-                                <div class="col-md-4"><label class="form-label small">F20 (ISFUT)</label><input type="number" step="0.00000001" name="factor_20" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F21</label><input type="number" step="0.00000001" name="factor_21" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F22</label><input type="number" step="0.00000001" name="factor_22" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F23</label><input type="number" step="0.00000001" name="factor_23" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F24</label><input type="number" step="0.00000001" name="factor_24" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F25</label><input type="number" step="0.00000001" name="factor_25" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F26</label><input type="number" step="0.00000001" name="factor_26" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F27</label><input type="number" step="0.00000001" name="factor_27" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F28</label><input type="number" step="0.00000001" name="factor_28" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F29</label><input type="number" step="0.00000001" name="factor_29" class="form-control"></div>
+                        <div class="alert alert-info border-0 mb-3 py-2">
+                            <i class="bi bi-info-circle me-2"></i> Ingrese montos ($) y pulse <strong>Calcular</strong>.
+                        </div>
+
+                        <ul class="nav nav-tabs mb-3">
+                            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-creditos" type="button">1. Créditos</button></li>
+                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-rentas" type="button">2. Rentas</button></li>
+                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-otros" type="button">3. Otros</button></li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <div class="tab-pane fade show active" id="tab-creditos">
+                                <div class="row g-2">
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F08: Con crédito IDPC</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_08" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F09: Acum. 2016</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_09" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F10: IDPC Voluntario</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_10" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F11: Sin derecho</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_11" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F12: Rentas RAP</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_12" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F13: Otras rentas</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_13" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F14: Exceso Distrib.</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_14" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F15: ISFUT Ley 20.780</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_15" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F16: Rentas ISFUT</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_16" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
+                                    
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F17: Rentas Exentas</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_17" class="form-control fw-bold text-end" placeholder="0.00000000"></div></div>
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F18: Rentas IGC/IA</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_18" class="form-control fw-bold text-end" placeholder="0.00000000"></div></div>
+                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F19: Ingresos No Renta</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_19" class="form-control fw-bold text-end" placeholder="0.00000000"></div></div>
+                                    
+                                    <div class="col-12 mt-2 text-end border-top pt-1">
+                                        <small class="fw-bold">Suma Factores (F08-F16): <span id="display-suma-total">0.00000000</span> / 1.0</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="tab-rentas">
+                                <div class="row g-3">
+        
+                                    <div class="col-md-6">
+                                        <label class="fw-bold text-nuam">F20: ISFUT Ley 20.780</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_20" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="fw-bold text-nuam">F21: Rentas hasta 31.12.1983</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_21" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="fw-bold text-nuam">F22: Rentas Exentas IGC/IA</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_22" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="fw-bold text-nuam">F23: Ingresos No Renta</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_23" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="fw-bold text-nuam">F24: RFE (Art. 82 Letra B)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_24" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="fw-bold text-nuam">F25: Asoc. Rentas Afectas (Sin Der.)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_25" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="fw-bold text-nuam">F26: Asoc. Rentas Afectas (Con Der.)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_26" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="fw-bold text-nuam">F27: Asoc. Rentas Exentas (Sin Der.)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_27" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="fw-bold text-nuam">F28: Asoc. Rentas Exentas (Con Der.)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_28" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="fw-bold text-nuam">F29: Crédito por IPE</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_29" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="tab-otros">
+                                <div class="row g-3">
+        
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-secondary">F30: Asoc. Rentas Afectas (Sin Der.)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_30" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-secondary">F31: Asoc. Rentas Afectas (Con Der.)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_31" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-secondary">F32: Asoc. Rentas Exentas (Sin Der.)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_32" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-secondary">F33: Asoc. Rentas Exentas (Con Der.)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_33" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-secondary">F34: Crédito por IPE</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_34" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-secondary">F35: Tasa Efectiva FUT (TEF)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_35" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-secondary">F36: Tasa Efectiva FUNT (TEX)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_36" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-secondary">F37: Devolución Capital (Art 17 N°7)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
+                                            <input type="number" step="0.00000001" name="factor_37" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                        </div>
+                                    </div>
+
+                                </div>
                             </div>
                         </div>
 
-                        <div class="tab-pane fade" id="tab-otros">
-                            <div class="row g-3">
-                                <div class="col-md-4"><label class="form-label small">F30</label><input type="number" step="0.00000001" name="factor_30" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F31</label><input type="number" step="0.00000001" name="factor_31" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F32</label><input type="number" step="0.00000001" name="factor_32" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F33 (Crédito IPE)</label><input type="number" step="0.00000001" name="factor_33" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F34</label><input type="number" step="0.00000001" name="factor_34" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F35</label><input type="number" step="0.00000001" name="factor_35" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F36</label><input type="number" step="0.00000001" name="factor_36" class="form-control"></div>
-                                <div class="col-md-4"><label class="form-label small">F37 (Otros)</label><input type="number" step="0.00000001" name="factor_37" class="form-control"></div>
+                        <div class="modal-footer border-top mt-4 d-flex justify-content-between">
+                            <button type="button" class="btn btn-secondary px-4" onclick="volverAlPaso1()"><i class="bi bi-arrow-left"></i> Volver</button>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-info text-white px-4" onclick="ejecutarCalculoMasivo()"><i class="bi bi-calculator"></i> Calcular</button>
+                                <button type="submit" id="btn-grabar-final" class="btn btn-success px-4" disabled><i class="bi bi-save"></i> Grabar</button>
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" id="btn-guardar" class="btn text-white" style="background-color: #003366;">Guardar</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="modalCargaMasiva" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="{% url 'carga_masiva' %}" enctype="multipart/form-data">
+<div class="modal fade" id="modalCargaMasiva" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl"> <div class="modal-content">
+            <form method="POST" action="{% url 'carga_masiva' %}" enctype="multipart/form-data" id="form-carga-masiva">
                 {% csrf_token %}
+                
                 <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title">Carga Masiva (Excel)</h5>
+                    <h5 class="modal-title"><i class="bi bi-file-earmark-spreadsheet"></i> Carga Masiva de Factores</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
+                
                 <div class="modal-body">
-                    <p>Seleccione un archivo Excel (.xlsx) o CSV con el formato requerido.</p>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Archivo</label>
-                        <input type="file" name="archivo_excel" class="form-control" accept=".xlsx, .xls, .csv" required>
+                    <div class="alert alert-light border-success d-flex align-items-center mb-3">
+                        <i class="bi bi-info-circle-fill text-success fs-4 me-3"></i>
+                        <div>
+                            <strong>Instrucciones:</strong>
+                            <ul class="mb-0 small text-secondary">
+                                <li>El archivo debe ser formato <strong>.CSV</strong> (separado por punto y coma ; o comas ,).</li>
+                                <li>Debe contener las columnas obligatorias: <strong>Instrumento, Ejercicio, F08...F37</strong>.</li>
+                                <li>El sistema validará el formato antes de permitir la carga.</li>
+                            </ul>
+                        </div>
                     </div>
-                    <div class="alert alert-warning small">
-                        <i class="bi bi-exclamation-triangle"></i> 
-                        Asegúrese de que el archivo tenga las columnas: <strong>Instrumento, Ejercicio, F08, F09...</strong>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">1. Seleccionar Archivo CSV</label>
+                        <input type="file" name="archivo_excel" id="input_archivo_csv" class="form-control" accept=".csv" required onchange="previsualizarCSV()">
+                        <div class="form-text text-muted">Seleccione el archivo para generar la vista previa.</div>
                     </div>
+
+                    <div id="zona-preview" class="d-none">
+                        <h6 class="fw-bold text-success border-bottom pb-2">2. Vista Previa del Archivo</h6>
+                        <div class="table-responsive border rounded" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-hover table-striped mb-0 text-nowrap" id="tabla-preview">
+                                <thead class="table-success">
+                                    </thead>
+                                <tbody>
+                                    </tbody>
+                            </table>
+                        </div>
+                        <div id="info-registros" class="mt-2 text-end small fw-bold text-secondary"></div>
+                    </div>
+
+                    <div id="error-preview" class="alert alert-danger mt-3 d-none">
+                        <i class="bi bi-exclamation-triangle-fill"></i> <span id="msg-error-csv">Error de formato.</span>
+                    </div>
+
                 </div>
+                
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Subir y Procesar</button>
+                    <button type="submit" class="btn btn-success" id="btn-confirmar-carga" disabled>
+                        <i class="bi bi-cloud-upload"></i> Confirmar y Cargar
+                    </button>
                 </div>
             </form>
         </div>
@@ -263,67 +496,294 @@
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Inputs F08 a F19
-        const inputs = document.querySelectorAll('.factor-check');
-        const displaySuma = document.getElementById('suma-total');
-        const msgError = document.getElementById('msg-error');
-        const btnGuardar = document.getElementById('btn-guardar');
+    // 1. VALIDAR MERCADO
+    function validarYAbrirModal() {
+        const filtroMercado = document.getElementById('filtro_mercado');
+        const filtroAnio = document.getElementById('filtro_ejercicio');
+        if (!filtroMercado.value) {
+            alert("⚠️ Debe seleccionar un 'Tipo de Mercado' en los filtros.");
+            filtroMercado.focus();
+            filtroMercado.classList.add('border-danger');
+            return;
+        }
+        filtroMercado.classList.remove('border-danger');
+        document.getElementById('modal_mercado').value = filtroMercado.value;
+        document.getElementById('modal_anio').value = filtroAnio.value || "2025";
+        volverAlPaso1();
+        new bootstrap.Modal(document.getElementById('modalCalificacion')).show();
+    }
 
-        const LIMITE = 1.0;
-        const TOL = 0.00000001; // tolerancia numérica
+    // 2. WIZARD
+    function pasarAlPaso2() {
+        const selectInst = document.getElementById('input_instrumento');
+        const fecha = document.getElementById('input_fecha_pago');
+        const secuencia = document.querySelector('input[name="secuencia"]');
+        const dividendo = document.querySelector('input[name="monto_total"]');
+        
+        let errores = false;
+        if(!selectInst.value) { selectInst.classList.add('is-invalid'); errores = true; } else { selectInst.classList.remove('is-invalid'); }
+        if(!fecha.value) { fecha.classList.add('is-invalid'); errores = true; } else { fecha.classList.remove('is-invalid'); }
+        if(parseInt(secuencia.value) <= 10000) { secuencia.classList.add('is-invalid'); alert("Secuencia debe ser > 10.000"); errores = true; } else { secuencia.classList.remove('is-invalid'); }
 
-        function calcular() {
-            let total = 0;
+        if(errores) return;
 
-            inputs.forEach(input => {
-                // Reemplazo coma por punto por si el usuario escribe 0,6
-                const valor = parseFloat((input.value || '').replace(',', '.'));
-                if (!isNaN(valor)) {
-                    total += valor;
+        // Actualizar Resumen (USANDO EL TEXTO DEL SELECT)
+        const textoInstrumento = selectInst.options[selectInst.selectedIndex].text;
+        document.getElementById('resumen_instrumento').innerText = textoInstrumento;
+        document.getElementById('resumen_anio_txt').innerText = document.getElementById('modal_anio').value;
+        document.getElementById('resumen_fecha').innerText = fecha.value;
+        document.getElementById('resumen_monto').innerText = dividendo.value;
+
+        document.getElementById('paso-1-datos').classList.add('d-none');
+        document.getElementById('paso-2-factores').classList.remove('d-none');
+    }
+
+    function volverAlPaso1() {
+        document.getElementById('paso-1-datos').classList.remove('d-none');
+        document.getElementById('paso-2-factores').classList.add('d-none');
+    }
+
+    // 3. CÁLCULO Y VALIDACIÓN F08-F16
+    function ejecutarCalculoMasivo() {
+        const montoTotal = parseFloat(document.querySelector('input[name="monto_total"]').value);
+        const inputsMontos = document.querySelectorAll('.input-monto-calculo');
+
+        if (montoTotal > 0) {
+            inputsMontos.forEach(inputMonto => {
+                const monto = parseFloat(inputMonto.value) || 0;
+                const inputFactor = inputMonto.nextElementSibling;
+                if(monto > 0) {
+                    inputFactor.value = (monto / montoTotal).toFixed(8);
                 }
             });
+        }
+        validarSumaCritica();
+    }
 
-            // Mostrar suma con 8 decimales
-            displaySuma.textContent = total.toFixed(8);
+    function validarSumaCritica() {
+        const inputsCriticos = document.querySelectorAll('.factor-suma-critica');
+        let suma = 0;
+        inputsCriticos.forEach(input => suma += parseFloat(input.value) || 0);
 
-            // Si la suma es mayor a 1.0 -> ERROR
-            if (total - LIMITE > TOL) {
-                msgError.classList.remove('d-none');
-                msgError.textContent = 'ERROR: la suma no puede ser mayor a 1.0';
+        const display = document.getElementById('display-suma-total');
+        const btnGrabar = document.getElementById('btn-grabar-final');
+        
+        display.innerText = suma.toFixed(8);
 
-                // texto rojo
-                displaySuma.classList.remove('text-success');
-                displaySuma.classList.add('text-danger');
+        if(suma > 1.00000001) {
+            display.classList.add('text-danger');
+            btnGrabar.disabled = true;
+            alert("⚠️ Suma F08-F16 supera 1.0");
+        } else {
+            display.classList.remove('text-danger');
+            btnGrabar.disabled = false;
+        }
+    }
 
-                // bloquear botón
-                btnGuardar.disabled = true;
-                btnGuardar.classList.add('disabled');
-                btnGuardar.style.opacity = '0.5';
-                btnGuardar.style.cursor = 'not-allowed';
-            } else {
-                msgError.classList.add('d-none');
+    function limpiarFactorAsociado(input) {
+        input.nextElementSibling.value = "";
+        document.getElementById('btn-grabar-final').disabled = true;
+    }
 
-                // texto verde cuando está OK (<= 1.0)
-                displaySuma.classList.remove('text-danger');
-                displaySuma.classList.add('text-success');
+    // Selección de Fila
+    function seleccionarFila(fila, id) {
+        fila.querySelector('input[type="radio"]').checked = true;
+        document.getElementById('input_id_seleccionado').value = id;
+        document.querySelectorAll('tr').forEach(tr => tr.classList.remove('table-active'));
+        fila.classList.add('table-active');
+    }
 
-                // habilitar botón
-                btnGuardar.disabled = false;
-                btnGuardar.classList.remove('disabled');
-                btnGuardar.style.opacity = '1';
-                btnGuardar.style.cursor = 'pointer';
-            }
+    function confirmarEliminar() {
+        if(!document.getElementById('input_id_seleccionado').value) {
+            alert("Seleccione un registro.");
+            return false;
+        }
+        return confirm("¿Eliminar registro?");
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.factor-suma-critica').forEach(input => {
+            input.addEventListener('input', validarSumaCritica);
+        });
+    });
+
+    // --- LÓGICA DE MODIFICACIÓN (HDU 5) ---
+
+    function iniciarModificacion() {
+        // 1. Obtener ID seleccionado del radio button
+        const id = document.getElementById('input_id_seleccionado').value;
+        
+        if (!id) {
+            alert("⚠️ Por favor, seleccione una fila (círculo) para modificar.");
+            return;
         }
 
-        // Escuchar cambios en todos los factores
-        inputs.forEach(input => {
-            input.addEventListener('input', calcular);
-        });
+        // 2. Hacer petición AJAX a Django para obtener los datos
+        // Usamos fetch para llamar a la URL que creamos en el Paso 1
+        fetch(`/obtener-detalle/${id}/`)
+            .then(response => response.json())
+            .then(response => {
+                if (response.status === 'ok') {
+                    llenarModalConDatos(response.data);
+                } else {
+                    alert("Error al cargar datos: " + response.msg);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
 
-        // Calcular una vez al cargar el modal/página
-        calcular();
-    });
+    function llenarModalConDatos(data) {
+        // 3. Rellenar los campos del Modal
+        
+        // ID Edición (Critico para que el backend sepa que es update)
+        document.getElementById('input_id_edicion').value = data.id;
+        
+        // Paso 1: Datos Básicos
+        document.getElementById('input_instrumento').value = data.instrumento_id; // Select usa ID
+        document.getElementById('modal_anio').value = data.ejercicio;
+        document.getElementById('input_fecha_pago').value = data.fecha_pago;
+        document.querySelector('input[name="monto_total"]').value = data.monto_total;
+        document.querySelector('textarea[name="descripcion"]').value = data.descripcion;
+        document.querySelector('input[name="secuencia"]').value = data.secuencia;
+        document.querySelector('input[name="factor_actualizacion"]').value = data.factor_actualizacion;
+        document.getElementById('checkIsfut').checked = data.es_isfut;
+
+        // Paso 2: Factores
+        // Llenamos los inputs de factores. Los montos los dejamos vacíos para obligar recálculo si quiere cambiar.
+        document.querySelector('input[name="factor_08"]').value = data.factor_08;
+        document.querySelector('input[name="factor_09"]').value = data.factor_09;
+        document.querySelector('input[name="factor_10"]').value = data.factor_10;
+        // ... Dupla B: Asegúrense de mapear el resto si es necesario ...
+        
+        // Forzamos actualización de validaciones visuales
+        validarSumaCritica();
+
+        // Cambiar Título del Modal
+        document.querySelector('.modal-title').innerText = "Modificar Calificación N° " + data.id;
+
+        // Reseteamos el Wizard al paso 1
+        volverAlPaso1();
+
+        // 4. Abrir Modal
+        new bootstrap.Modal(document.getElementById('modalCalificacion')).show();
+    }
+
+    // IMPORTANTE: Limpiar el ID de edición cuando se cierra el modal o se da a "Nuevo"
+    function validarYAbrirModal() {
+        const filtroMercado = document.getElementById('filtro_mercado');
+        const filtroAnio = document.getElementById('filtro_ejercicio');
+        if (!filtroMercado.value) {
+            alert("⚠️ Debe seleccionar un 'Tipo de Mercado' en los filtros.");
+            filtroMercado.focus();
+            filtroMercado.classList.add('border-danger');
+            return;
+        }
+        filtroMercado.classList.remove('border-danger');
+        document.getElementById('input_id_edicion').value = "";
+        document.querySelector('.modal-title').innerText = "Ingresar Nueva Calificación";
+        document.getElementById('form-ingreso-manual').reset(); // Limpia inputs
+        volverAlPaso1();
+        new bootstrap.Modal(document.getElementById('modalCalificacion')).show();
+    }
+
+    // --- LÓGICA DE PREVISUALIZACIÓN CSV MEJORADA ---
+    function previsualizarCSV() {
+        const input = document.getElementById('input_archivo_csv');
+        const zonaPreview = document.getElementById('zona-preview');
+        const tablaHead = document.querySelector('#tabla-preview thead');
+        const tablaBody = document.querySelector('#tabla-preview tbody');
+        const btnGuardar = document.getElementById('btn-confirmar-carga');
+        const infoRegistros = document.getElementById('info-registros');
+
+        // Resetear visual
+        zonaPreview.classList.add('d-none');
+        document.getElementById('error-preview').classList.add('d-none');
+        btnGuardar.disabled = true;
+        tablaHead.innerHTML = '';
+        tablaBody.innerHTML = '';
+
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            
+            reader.onload = function (e) {
+                const text = e.target.result;
+                const lineas = text.split('\n').filter(linea => linea.trim().length > 0);
+                
+                if (lineas.length < 2) {
+                    mostrarErrorCSV("El archivo está vacío o no tiene datos.");
+                    return;
+                }
+
+                const primeraLinea = lineas[0];
+
+                // 1. DETECCIÓN INTELIGENTE DE SEPARADOR
+                // Contamos qué aparece más en la primera línea: ¿Comas o Punto y Coma?
+                const cuentaComas = (primeraLinea.match(/,/g) || []).length;
+                const cuentaPuntoComa = (primeraLinea.match(/;/g) || []).length;
+                
+                let separador = ',';
+                if (cuentaPuntoComa > cuentaComas) {
+                    separador = ';';
+                }
+
+                console.log("Separador detectado:", separador === ';' ? 'Punto y Coma (;)' : 'Coma (,)');
+
+                // 2. LIMPIEZA DE ENCABEZADOS
+                // Quitamos comillas, espacios al inicio/final y caracteres invisibles
+                const encabezados = primeraLinea.split(separador).map(h => 
+                    h.trim().replace(/^"|"$/g, '').replace(/\r/g, '')
+                );
+
+                console.log("Encabezados leídos:", encabezados); // MIRA LA CONSOLA (F12) SI FALLA
+
+                // 3. VALIDACIÓN FLEXIBLE
+                // Buscamos "F08" (o "f08" o "Factor 08" o "F08 ")
+                const tieneInstrumento = encabezados.some(h => h.toUpperCase().includes('INSTRUMENTO'));
+                
+                // Buscamos F08 específicamente para asegurar que es un archivo de factores
+                const tieneF08 = encabezados.some(h => h.toUpperCase().includes('F08'));
+
+                if (!tieneInstrumento) {
+                    mostrarErrorCSV(`No se encontró la columna 'Instrumento'. Encabezados detectados: ${encabezados.join(', ')}`);
+                    return;
+                }
+                if (!tieneF08) {
+                    mostrarErrorCSV(`No se encontró la columna 'F08'. Revise si el archivo usa ';' o ','. Encabezados: ${encabezados.join(', ')}`);
+                    return;
+                }
+
+                // 4. DIBUJAR TABLA
+                let htmlHead = '<tr>';
+                encabezados.forEach(enc => htmlHead += `<th>${enc}</th>`);
+                htmlHead += '</tr>';
+                tablaHead.innerHTML = htmlHead;
+
+                let filasMostrar = Math.min(lineas.length - 1, 5);
+                for (let i = 1; i <= filasMostrar; i++) {
+                    const celdas = lineas[i].split(separador);
+                    let htmlRow = '<tr>';
+                    celdas.forEach(celda => {
+                        htmlRow += `<td>${celda.trim().replace(/^"|"$/g, '')}</td>`;
+                    });
+                    htmlRow += '</tr>';
+                    tablaBody.innerHTML += htmlRow;
+                }
+
+                zonaPreview.classList.remove('d-none');
+                btnGuardar.disabled = false;
+                infoRegistros.innerText = `Vista previa de las primeras ${filasMostrar} filas.`;
+            };
+
+            reader.readAsText(input.files[0], "ISO-8859-1");
+        }
+    }
+
+    function mostrarErrorCSV(mensaje) {
+        const divError = document.getElementById('error-preview');
+        document.getElementById('msg-error-csv').innerText = mensaje;
+        divError.classList.remove('d-none');
+        document.getElementById('input_archivo_csv').value = "";
+    }
+
 </script>
-
 {% endblock %}
