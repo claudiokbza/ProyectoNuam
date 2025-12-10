@@ -69,7 +69,7 @@ def procesar_carga_masiva(archivo, usuario_actual):
                     nueva = CalificacionTributaria()
                     nueva.usuario = usuario_actual
                     nueva.instrumento = inst_obj
-                    nueva.origen = 'Carga Masiva'
+                    nueva.origen = 'Corredor'
                     
                     # --- C. ARREGLO DE FECHAS (Nuevo!) ---
                     # El CSV trae: "09-12-2025" (DD-MM-YYYY)

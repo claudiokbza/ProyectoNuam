@@ -137,7 +137,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             
-            <form method="POST" id="form-ingreso-manual">
+            <form method="POST" id="form-ingreso-manual" action="{% url 'mantenedor' %}" novalidate>
                 {% csrf_token %}
                 <input type="hidden" name="id_edicion" id="input_id_edicion">
                 <div class="modal-body">
@@ -146,19 +146,21 @@
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label fw-bold">Mercado</label>
-                                <input type="text" id="modal_mercado" class="form-control bg-light" readonly>
+                                <input type="text" class="form-control" id="input_mercado" readonly disabled>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label fw-bold">Año</label>
-                                <input type="number" name="ejercicio" id="modal_anio" class="form-control bg-light" readonly>
+                                <input type="number" class="form-control" id="modal_anio" name="ejercicio" value="2025">
                             </div>
                             
                             <div class="col-md-6">
                                 <label class="form-label fw-bold text-primary">Instrumento (*)</label>
-                                <select name="instrumento" id="input_instrumento" class="form-select" required>
-                                    <option value="">-- Seleccione Instrumento --</option>
+                                <select name="instrumento" id="input_instrumento" class="form-select" required onchange="actualizarDatosInstrumento()">
+                                    <option value="" data-mercado="">-- Seleccione Instrumento --</option>
                                     {% for inst in instrumentos %}
-                                        <option value="{{ inst.id }}">{{ inst.codigo }} - {{ inst.nombre }}</option>
+                                        <option value="{{ inst.id }}" data-mercado="{{ inst.mercado.nombre }}">
+                                            {{ inst.codigo }} - {{ inst.nombre }}
+                                        </option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -496,6 +498,43 @@
 </div>
 
 <script>
+    // --- FUNCIÓN PARA LLENAR MERCADO Y AÑO AUTOMÁTICAMENTE ---
+    function actualizarDatosInstrumento() {
+        // 1. Identificar los elementos
+        const select = document.getElementById('input_instrumento');
+        const inputMercado = document.getElementById('input_mercado'); // Asegúrate que tu input de mercado tenga este ID
+        const inputAnio = document.getElementById('modal_anio');
+        
+        // 2. Obtener la opción que el usuario seleccionó
+        const opcionSeleccionada = select.options[select.selectedIndex];
+        
+        // 3. Leer el dato "escondido" (data-mercado)
+        const nombreMercado = opcionSeleccionada.getAttribute('data-mercado');
+        
+        // 4. Escribir en la casilla de Mercado
+        if (inputMercado) {
+            inputMercado.value = nombreMercado || ''; // Si no hay mercado, dejar vacío
+        }
+
+        // 5. Truco para el Año: Si está vacío, poner el año actual (2025)
+        if (inputAnio && !inputAnio.value) {
+            inputAnio.value = "2025"; 
+        }
+    }
+
+    // BONUS: Cuando se abre el modal "Nuevo", poner el año 2025 por defecto
+    document.addEventListener('DOMContentLoaded', function() {
+        const btnIngresar = document.querySelector('[data-bs-target="#modalCalificacion"]'); // O el botón azul "+ Ingresar"
+        if(btnIngresar){
+            btnIngresar.addEventListener('click', function(){
+                 // Solo si es nuevo (limpiar mercado y poner año)
+                if(!document.getElementById('input_id_edicion').value) {
+                    document.getElementById('modal_anio').value = "2025";
+                    document.getElementById('input_mercado').value = "";
+                }
+            });
+        }
+    });
     // 1. VALIDAR MERCADO
     function validarYAbrirModal() {
         const filtroMercado = document.getElementById('filtro_mercado');
@@ -515,25 +554,105 @@
 
     // 2. WIZARD
     function pasarAlPaso2() {
+        // --- 1. CAPTURAR TODOS LOS CAMPOS ---
         const selectInst = document.getElementById('input_instrumento');
-        const fecha = document.getElementById('input_fecha_pago');
-        const secuencia = document.querySelector('input[name="secuencia"]');
-        const dividendo = document.querySelector('input[name="monto_total"]');
+        const inputMercado = document.getElementById('input_mercado');
+        const inputAnio = document.getElementById('modal_anio');
+        const inputFecha = document.getElementById('input_fecha_pago');
         
+        // Usamos querySelector para buscar por 'name' si no tienen ID específico
+        const inputSecuencia = document.querySelector('input[name="secuencia"]');
+        const inputMonto = document.querySelector('input[name="monto_total"]');
+        const inputHistorico = document.querySelector('input[name="valor_historico"]'); // Asegúrate que tu input tenga name="valor_historico"
+        const inputFactorAct = document.querySelector('input[name="factor_actualizacion"]');
+        const inputDescripcion = document.querySelector('textarea[name="descripcion"]'); // O input, según uses
+
         let errores = false;
-        if(!selectInst.value) { selectInst.classList.add('is-invalid'); errores = true; } else { selectInst.classList.remove('is-invalid'); }
-        if(!fecha.value) { fecha.classList.add('is-invalid'); errores = true; } else { fecha.classList.remove('is-invalid'); }
-        if(parseInt(secuencia.value) <= 10000) { secuencia.classList.add('is-invalid'); alert("Secuencia debe ser > 10.000"); errores = true; } else { secuencia.classList.remove('is-invalid'); }
+        let mensajeError = "";
 
-        if(errores) return;
+        // --- 2. VALIDACIONES DE OBLIGATORIEDAD (NO VACÍOS) ---
 
-        // Actualizar Resumen (USANDO EL TEXTO DEL SELECT)
+        // A. Instrumento
+        if (!selectInst.value) {
+            selectInst.classList.add('is-invalid'); errores = true;
+        } else { selectInst.classList.remove('is-invalid'); }
+
+        // B. Mercado (Automático pero obligatorio)
+        if (!inputMercado.value.trim()) {
+            inputMercado.classList.add('is-invalid'); errores = true;
+            mensajeError = "Falta el Mercado (seleccione un instrumento válido).";
+        } else { inputMercado.classList.remove('is-invalid'); }
+
+        // C. Año
+        if (!inputAnio.value) {
+            inputAnio.classList.add('is-invalid'); errores = true;
+        } else { inputAnio.classList.remove('is-invalid'); }
+
+        // D. Secuencia
+        if (!inputSecuencia.value || parseInt(inputSecuencia.value) <= 10000) {
+            inputSecuencia.classList.add('is-invalid'); 
+            errores = true;
+            
+            // Si es el primer error que encontramos, definimos el mensaje
+            if (!mensajeError) mensajeError = "⚠️ La secuencia debe ser mayor a 10.000.";
+        } else { 
+            inputSecuencia.classList.remove('is-invalid'); 
+        }
+
+        // E. Fecha Pago
+        if (!inputFecha.value) {
+            inputFecha.classList.add('is-invalid'); errores = true;
+        } else { inputFecha.classList.remove('is-invalid'); }
+
+        // F. Factor Actualización (Obligatorio)
+        if (!inputFactorAct || !inputFactorAct.value) {
+            if(inputFactorAct) inputFactorAct.classList.add('is-invalid'); 
+            errores = true;
+        } else { if(inputFactorAct) inputFactorAct.classList.remove('is-invalid'); }
+
+        // G. Descripción (Obligatorio según pediste "todos los campos")
+        if (inputDescripcion && !inputDescripcion.value.trim()) {
+            inputDescripcion.classList.add('is-invalid'); errores = true;
+        } else { if(inputDescripcion) inputDescripcion.classList.remove('is-invalid'); }
+
+
+        // --- 3. VALIDACIONES LÓGICAS (> 0) ---
+
+        // H. Dividendo / Monto Total (> 0)
+        if (!inputMonto.value || parseFloat(inputMonto.value) <= 0) {
+            inputMonto.classList.add('is-invalid');
+            errores = true;
+            // Si estaba vacío ya es error, pero si es <=0 también es error
+        } else {
+            inputMonto.classList.remove('is-invalid');
+        }
+
+        // I. Valor Histórico (> 0)
+        if (!inputHistorico.value || parseFloat(inputHistorico.value) <= 0) {
+            inputHistorico.classList.add('is-invalid');
+            errores = true;
+        } else {
+            inputHistorico.classList.remove('is-invalid');
+        }
+
+        // --- 4. RESULTADO ---
+        if (errores) {
+            // Mensaje genérico o específico
+            if (!mensajeError) mensajeError = "⚠️ Todos los campos son obligatorios y los montos deben ser mayores a 0.";
+            alert(mensajeError);
+            return; // DETIENE EL PROCESO
+        }
+
+        // --- 5. SI PASA TODO, AVANZAR ---
+        
+        // Actualizar Resumen Visual (Cabecera paso 2)
         const textoInstrumento = selectInst.options[selectInst.selectedIndex].text;
         document.getElementById('resumen_instrumento').innerText = textoInstrumento;
-        document.getElementById('resumen_anio_txt').innerText = document.getElementById('modal_anio').value;
-        document.getElementById('resumen_fecha').innerText = fecha.value;
-        document.getElementById('resumen_monto').innerText = dividendo.value;
+        document.getElementById('resumen_anio_txt').innerText = inputAnio.value;
+        document.getElementById('resumen_fecha').innerText = inputFecha.value;
+        document.getElementById('resumen_monto').innerText = inputMonto.value;
 
+        // Cambio de Pantalla (Wizard)
         document.getElementById('paso-1-datos').classList.add('d-none');
         document.getElementById('paso-2-factores').classList.remove('d-none');
     }
