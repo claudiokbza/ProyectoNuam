@@ -1,436 +1,279 @@
 {% extends 'core/base.html' %}
+{% load static %}
+{% load humanize %}
+{% load custom_filters %}
 
 {% block content %}
-<div class="card shadow-sm border-0">
-    
-    <div class="card-header bg-light py-4 border-bottom">
-        <h5 class="mb-3 text-nuam fw-bold" style="color: #003366;">
-            <i class="bi bi-filter-circle"></i> Buscador de Calificaciones Tributarias
-        </h5>
-        
-        <form method="GET" class="row g-3 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-secondary">Tipo de Mercado (*)</label>
-                <select name="q_mercado" id="filtro_mercado" class="form-select">
-                    <option value="">-- Seleccione Mercado --</option>
-                    <option value="Acciones">Acciones</option>
-                    <option value="CFI">CFI</option>
-                    <option value="Fondos Mutuos">Fondos Mutuos</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-secondary">Origen Información</label>
-                <select name="q_origen" class="form-select">
-                    <option value="">Todos</option>
-                    <option value="Corredor">Corredor</option>
-                    <option value="Entidad Prestadora del Servicio">Entidad Prestadora del Servicio</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label fw-bold small text-secondary">Periodo (Año)</label>
-                <select name="q_ejercicio" id="filtro_ejercicio" class="form-select">
-                    <option value="">Todos</option>
-                    <option value="2024">2024</option>
-                    <option value="2025" selected>2025</option>
-                    <option value="2026">2026</option>
-                </select>
-            </div>
-            <div class="col-md-4 d-flex gap-2">
-                <button type="submit" class="btn btn-primary px-4" style="background-color: #003366; border-color: #003366;">
-                    <i class="bi bi-search"></i> Buscar
-                </button>
-                <a href="{% url 'mantenedor' %}" class="btn btn-outline-secondary px-4">
-                    <i class="bi bi-eraser"></i> Limpiar
-                </a>
-            </div>
-        </form>
+<div class="container-fluid mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-primary"><i class="bi bi-file-earmark-spreadsheet"></i> Mantenedor de Calificaciones</h2>
+            <p class="text-muted">Gestión de Dividendos y Factores Tributarios</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-success btn-lg shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCargaMasiva">
+                <i class="bi bi-file-earmark-excel"></i> Carga Masiva
+            </button>
+            
+            <button type="button" class="btn btn-primary btn-lg shadow-sm" onclick="abrirModalCrear()">
+                <i class="bi bi-plus-circle"></i> Nuevo Dividendo
+            </button>
+        </div>
     </div>
 
-    <form method="POST" id="form-acciones-tabla">
-        {% csrf_token %}
-        <input type="hidden" name="id_seleccionado" id="input_id_seleccionado">
-        
-        <div class="card-body p-0">
-            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                <table class="table table-hover table-bordered table-striped mb-0 text-nowrap align-middle" style="font-size: 0.85rem;">
-                    <thead class="table-dark">
+
+
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered align-middle w-100" id="tablaCalificaciones" style="font-size: 0.85rem;">
+                    <thead class="table-light sticky-header">
                         <tr>
-                            <th class="text-center" style="width: 50px; position: sticky; left: 0; z-index: 20;">Sel.</th>
-                            <th style="position: sticky; left: 50px; z-index: 20;">Ejercicio</th>
-                            <th style="position: sticky; left: 120px; z-index: 20;">Instrumento</th>
-                            {% if user.is_superuser %} <th>Usuario</th> {% endif %}
-                            <th>Fecha Pago</th>
-                            <th>Monto Total ($)</th>
-                            <th>Descripción</th>
-                            <th>Secuencia</th>
-                            <th>ISFUT</th>
-                            <th>Origen</th>
-                            <th>Fac. Act.</th>
-                            <th title="Con Crédito IDPC">F08</th>
-                            <th>F09</th><th>F10</th><th>F11</th><th>F12</th><th>F13</th><th>F14</th><th>F15</th>
-                            <th>F16</th><th>F17</th><th>F18</th><th>F19</th><th>F20</th><th>F21</th><th>F22</th>
-                            <th>F23</th><th>F24</th><th>F25</th><th>F26</th><th>F27</th><th>F28</th><th>F29</th>
-                            <th>F30</th><th>F31</th><th>F32</th><th>F33</th><th>F34</th><th>F35</th><th>F36</th><th>F37</th>
+                            <th class="text-center bg-light">N° Div.</th>
+                            <th class="text-center">RUT Prop.</th>
+                            <th class="text-start">Instrumento</th>
+                            
+                            {% if user.is_superuser %}
+                                <th class="text-center text-primary bg-light">Usuario (Creador)</th>
+                            {% endif %}
+
+                            <th class="text-center">Fecha Pago</th>
+                            <th class="text-end">Monto Histórico</th>
+                            <th class="text-center">Factor</th>
+                            <th class="text-end fw-bold bg-light">Monto Actualizado</th>
+                            <th class="text-center">ISFUT</th>
+                            <th class="text-center">Acciones</th>
+                            {% for f_num in rango_factores %}
+                                <th class="text-center small text-muted" style="min-width: 50px;">F{{ f_num|stringformat:"02d" }}</th>
+                            {% endfor %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for c in calificaciones %}
-                        <tr onclick="seleccionarFila(this, {{ c.id }})">
-                            <td class="text-center" style="position: sticky; left: 0; background-color: inherit; z-index: 10;">
-                                <input type="radio" name="radio_seleccion" value="{{ c.id }}" class="form-check-input">
+                        <tr>
+                            <td class="text-center fw-bold text-secondary">{{ c.id }}</td>
+                            <td class="text-center font-monospace small">{{ c.rut_propietario }}</td>
+                            
+                            <td class="fw-bold text-primary" title="Código: {{ c.instrumento.codigo }}">
+                                {{ c.instrumento.nombre }}
                             </td>
-                            <td style="position: sticky; left: 50px; background-color: inherit; z-index: 10;">{{ c.ejercicio }}</td>
-                            <td style="position: sticky; left: 120px; background-color: inherit; z-index: 10;" class="fw-bold">{{ c.instrumento.codigo }}</td>
-                            {% if user.is_superuser %} 
-                                <td><span class="badge bg-warning text-dark">{{ c.usuario.username }}</span></td> 
+
+                            {% if user.is_superuser %}
+                                <td class="text-center">
+                                    <span class="badge bg-warning text-dark border border-dark">
+                                        <i class="bi bi-person-fill"></i> {{ c.usuario.username }}
+                                    </span>
+                                </td>
                             {% endif %}
-                            <td>{{ c.fecha_pago|date:"d/m/Y" }}</td>
-                            <td>${{ c.monto_total }}</td>
-                            <td>{{ c.descripcion|default:"-" }}</td>
-                            <td>{{ c.secuencia }}</td>
-                            <td class="text-center">{% if c.es_isfut %}SI{% else %}-{% endif %}</td>
-                            <td>{{ c.origen }}</td>
-                            <td>{{ c.factor_actualizacion }}</td>
-                            <td>{{ c.factor_08 }}</td><td>{{ c.factor_09 }}</td><td>{{ c.factor_10 }}</td>
-                            <td>{{ c.factor_11 }}</td><td>{{ c.factor_12 }}</td><td>{{ c.factor_13 }}</td>
-                            <td>{{ c.factor_14 }}</td><td>{{ c.factor_15 }}</td><td>{{ c.factor_16 }}</td>
-                            <td>{{ c.factor_17 }}</td><td>{{ c.factor_18 }}</td><td>{{ c.factor_19 }}</td>
-                            <td>{{ c.factor_20 }}</td><td>{{ c.factor_21 }}</td><td>{{ c.factor_22 }}</td>
-                            <td>{{ c.factor_23 }}</td><td>{{ c.factor_24 }}</td><td>{{ c.factor_25 }}</td>
-                            <td>{{ c.factor_26 }}</td><td>{{ c.factor_27 }}</td><td>{{ c.factor_28 }}</td>
-                            <td>{{ c.factor_29 }}</td><td>{{ c.factor_30 }}</td><td>{{ c.factor_31 }}</td>
-                            <td>{{ c.factor_32 }}</td><td>{{ c.factor_33 }}</td><td>{{ c.factor_34 }}</td>
-                            <td>{{ c.factor_35 }}</td><td>{{ c.factor_36 }}</td><td>{{ c.factor_37 }}</td>
+
+                            <td class="text-center">{{ c.fecha_pago|date:"d/m/Y" }}</td>
+                            <td class="text-end text-muted">${{ c.monto_historico|intcomma }}</td>
+                            <td class="text-center">{{ c.factor_actualizacion|floatformat:6 }}</td>
+                            <td class="text-end text-success fw-bold bg-light">${{ c.monto_total|intcomma }}</td>
+                            <td class="text-center">{% if c.es_isfut %}<span class="badge bg-success">SI</span>{% else %}-{% endif %}</td>
+                            
+                            <td class="text-center">
+                                <button type="button" class="btn btn-sm btn-outline-warning border-0 btn-editar" 
+                                        data-id="{{ c.id }}"
+                                        data-rut="{{ c.rut_propietario }}"
+                                        data-instrumento="{{ c.instrumento.id }}"
+                                        data-ejercicio="{{ c.ejercicio }}"
+                                        data-fecha="{{ c.fecha_pago|date:'Y-m-d' }}"
+                                        data-monto-hist="{{ c.monto_historico|stringformat:'f' }}"
+                                        data-monto-total="{{ c.monto_total|stringformat:'f' }}"
+                                        data-factor-act="{{ c.factor_actualizacion|stringformat:'f' }}"
+                                        data-descripcion="{{ c.descripcion }}"
+                                        data-secuencia="{{ c.secuencia }}"
+                                        data-isfut="{{ c.es_isfut|yesno:'true,false' }}"
+                                        data-factores='{ {% for f in rango_factores %}"f{{ f|stringformat:"02d" }}": {{ c|get_factor_value:f|default:0|stringformat:"f" }}{% if not forloop.last %}, {% endif %}{% endfor %} }'>
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger border-0" onclick="eliminarRegistro('{{ c.id }}')"><i class="bi bi-trash"></i></button>
+                            </td>
+
+                            {% for f_num in rango_factores %}
+                                <td class="text-end text-muted">{{ c|get_factor_value:f_num|default:"-"|floatformat:6 }}</td>
+                            {% endfor %}
                         </tr>
                         {% empty %}
-                        <tr><td colspan="45" class="text-center py-5 text-muted">No se encontraron registros.</td></tr>
+                        <tr><td colspan="45" class="text-center py-5">No hay registros.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
-
-        <div class="card-footer bg-white py-3 border-top">
-            <div class="d-flex justify-content-end gap-2">
-                <button type="submit" name="accion_eliminar" class="btn btn-danger" onclick="return confirmarEliminar()">
-                    <i class="bi bi-trash"></i> Eliminar
-                </button>
-                <button type="button" class="btn btn-success text-white" data-bs-toggle="modal" data-bs-target="#modalCargaMasiva">
-                    <i class="bi bi-file-earmark-excel"></i> Carga Masiva
-                </button>
-                <button type="button" class="btn btn-primary" style="background-color: #003366;" onclick="validarYAbrirModal()">
-                    <i class="bi bi-plus-lg"></i> Ingresar
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="iniciarModificacion()">
-                    <i class="bi bi-pencil"></i> Modificar
-                </button>
-            </div>
-        </div>
-    </form>
+    </div>
 </div>
 
-<div class="modal fade" id="modalCalificacion" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl">
+<div class="modal fade" id="modalFormulario" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl"> 
         <div class="modal-content">
-            <div class="modal-header text-white" style="background-color: #003366;">
-                <h5 class="modal-title">Ingresar Nueva Calificación</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            
-            <form method="POST" id="form-ingreso-manual" action="{% url 'mantenedor' %}" novalidate>
+            <form method="POST" action="{% url 'mantenedor' %}" id="formMantenedor" onsubmit="return validarFormularioFinal()">
                 {% csrf_token %}
-                <input type="hidden" name="id_edicion" id="input_id_edicion">
-                <div class="modal-body">
+                <input type="hidden" name="id_edicion" id="id_edicion">
+
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold" id="modalTitulo">Ingreso de Dividendo</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body bg-light">
+                    
                     <div id="paso-1-datos">
-                        <h6 class="text-nuam border-bottom pb-2 mb-3 fw-bold">Paso 1: Datos del Evento</h6>
+                        <h6 class="text-primary border-bottom pb-2 mb-3 fw-bold">Paso 1: Identificación y Montos</h6>
+                        
                         <div class="row g-3">
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">Mercado</label>
-                                <input type="text" class="form-control" id="input_mercado" readonly disabled>
-                            </div>
                             <div class="col-md-2">
-                                <label class="form-label fw-bold">Año</label>
-                                <input type="number" class="form-control" id="modal_anio" name="ejercicio" value="2025">
+                                <label class="form-label fw-bold text-secondary">N° ID</label>
+                                <input type="text" id="inputVisualId" class="form-control bg-light fw-bold text-center" value="(Nuevo)" readonly tabindex="-1">
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold text-primary">Instrumento (*)</label>
-                                <select name="instrumento" id="input_instrumento" class="form-select" required onchange="actualizarDatosInstrumento()">
-                                    <option value="" data-mercado="">-- Seleccione Instrumento --</option>
-                                    {% for inst in instrumentos %}
-                                        <option value="{{ inst.id }}" data-mercado="{{ inst.mercado.nombre }}">
-                                            {{ inst.codigo }} - {{ inst.nombre }}
-                                        </option>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold text-danger">RUT Propietario (*)</label>
+                                <input type="text" name="rut_propietario" id="inputRut" class="form-control" 
+                                    placeholder="12345678-9" required 
+                                    oninput="formatearRut(this)" onblur="validarRutInput(this)">
+                                <div class="invalid-feedback">RUT Inválido</div>
+                            </div>
+
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold">Instrumento (*)</label>
+                                <select name="instrumento" id="inputInstrumento" class="form-select" required>
+                                    <option value="">Seleccione...</option>
+                                    {% for i in instrumentos %}
+                                        <option value="{{ i.id }}">{{ i.nombre }} ({{ i.codigo }})</option>
                                     {% endfor %}
                                 </select>
                             </div>
 
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">Secuencia Evento</label>
-                                <input type="number" name="secuencia" class="form-control" min="10001" placeholder="Ej: 10001" required>
+                                <label class="form-label">Fecha Pago (*)</label>
+                                <input type="date" name="fecha_pago" id="inputFechaPago" class="form-control" required>
                             </div>
+
+                            <input type="hidden" name="ejercicio" id="inputEjercicio" value="2025">
+
                             <div class="col-md-4">
-                                <label class="form-label fw-bold text-success">Dividendo / Monto Total ($)</label>
-                                <input type="number" step="0.01" name="monto_total" class="form-control border-success" value="0" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold text-primary">Fecha Pago (*)</label>
-                                <input type="date" name="fecha_pago" id="input_fecha_pago" class="form-control" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Valor Histórico ($)</label>
-                                <input type="number" step="0.01" name="valor_historico" class="form-control" value="0">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Factor Actualización</label>
-                                <input type="number" step="0.000001" name="factor_actualizacion" class="form-control" value="0.000000">
-                            </div>
-                            <div class="col-md-4 d-flex align-items-center pt-4">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" name="es_isfut" id="checkIsfut">
-                                    <label class="form-check-label fw-bold" for="checkIsfut">¿Acogido a ISFUT?</label>
+                                <label class="form-label fw-bold text-primary">Monto Histórico ($)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" step="0.01" name="monto_historico" id="inputMontoHistorico" class="form-control fw-bold" required onchange="recalcularTotal()">
                                 </div>
                             </div>
-                            <div class="col-12">
-                                <label class="form-label">Descripción</label>
-                                <textarea name="descripcion" class="form-control" rows="2"></textarea>
+                            <div class="col-md-3">
+                                <label class="form-label">Factor Actualización</label>
+                                <input type="number" step="0.000001" name="factor_actualizacion" id="inputFactorAct" class="form-control" value="1.000000" onchange="recalcularTotal()">
                             </div>
-                        </div>
-                        <div class="text-end mt-4 border-top pt-3">
-                            <button type="button" class="btn btn-primary px-5" style="background-color: #003366;" onclick="pasarAlPaso2()">
-                                OK / Siguiente <i class="bi bi-arrow-right"></i>
-                            </button>
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold text-success">Monto Actualizado (Base)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-success text-white">$</span>
+                                    <input type="number" step="0.01" id="inputMontoActualizadoVisual" class="form-control fw-bold bg-white text-success" readonly>
+                                </div>
+                            </div>
+
+                            <div class="col-md-8">
+                                <label class="form-label">Descripción</label>
+                                <input type="text" name="descripcion" id="inputDescripcion" class="form-control">
+                            </div>
+                            <div class="col-md-4 d-flex align-items-center mt-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="es_isfut" id="inputIsfut">
+                                    <label class="form-check-label fw-bold" for="inputIsfut">¿Es ISFUT?</label>
+                                </div>
+                            </div>
+                            <input type="hidden" name="secuencia" id="inputSecuencia" value="0">
                         </div>
                     </div>
 
                     <div id="paso-2-factores" class="d-none animate__animated animate__fadeIn">
                         
-                        <div class="card mb-3 border-primary bg-light">
-                            <div class="card-body py-2">
-                                <div class="row text-center small">
-                                    <div class="col-3 border-end">Inst: <strong id="resumen_instrumento">---</strong></div>
-                                    <div class="col-2 border-end">Año: <strong id="resumen_anio_txt">---</strong></div>
-                                    <div class="col-3 border-end">Fecha: <strong id="resumen_fecha">---</strong></div>
-                                    <div class="col-4">Monto Total: $<strong id="resumen_monto">---</strong></div>
-                                </div>
-                            </div>
+                        <div class="alert alert-info py-2 mb-3 d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-info-circle"></i> Ingrese los montos reajustados. El sistema calculará los factores.</span>
+                            <span class="badge bg-white text-dark border">Base: $<span id="lblBaseCalculo">0</span></span>
                         </div>
 
-                        <div class="alert alert-info border-0 mb-3 py-2">
-                            <i class="bi bi-info-circle me-2"></i> Ingrese montos ($) y pulse <strong>Calcular</strong>.
-                        </div>
-
-                        <ul class="nav nav-tabs mb-3">
-                            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-creditos" type="button">1. Créditos</button></li>
-                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-rentas" type="button">2. Rentas</button></li>
-                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-otros" type="button">3. Otros</button></li>
+                        <ul class="nav nav-tabs mb-3" id="myTab" role="tablist">
+                            {% for key, grupo in grupos.items %}
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link {% if forloop.first %}active{% endif %}" 
+                                        id="tab-btn-{{ key }}" 
+                                        data-bs-toggle="tab" 
+                                        data-bs-target="#tab-content-{{ key }}" 
+                                        type="button" role="tab">
+                                    {{ grupo.titulo|truncatechars:20 }} </button>
+                            </li>
+                            {% endfor %}
                         </ul>
 
-                        <div class="tab-content">
-                            <div class="tab-pane fade show active" id="tab-creditos">
-                                <div class="row g-2">
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F08: Con crédito IDPC</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_08" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F09: Acum. 2016</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_09" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F10: IDPC Voluntario</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_10" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F11: Sin derecho</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_11" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F12: Rentas RAP</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_12" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F13: Otras rentas</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_13" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F14: Exceso Distrib.</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_14" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F15: ISFUT Ley 20.780</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_15" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F16: Rentas ISFUT</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_16" class="form-control fw-bold text-end factor-suma-critica" placeholder="0.00000000"></div></div>
-                                    
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F17: Rentas Exentas</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_17" class="form-control fw-bold text-end" placeholder="0.00000000"></div></div>
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F18: Rentas IGC/IA</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_18" class="form-control fw-bold text-end" placeholder="0.00000000"></div></div>
-                                    <div class="col-md-6"><label class="small fw-bold text-nuam">F19: Ingresos No Renta</label><div class="input-group input-group-sm"><span class="input-group-text">$</span><input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)"><input type="number" step="0.00000001" name="factor_19" class="form-control fw-bold text-end" placeholder="0.00000000"></div></div>
-                                    
-                                    <div class="col-12 mt-2 text-end border-top pt-1">
-                                        <small class="fw-bold">Suma Factores (F08-F16): <span id="display-suma-total">0.00000000</span> / 1.0</small>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="tab-pane fade" id="tab-rentas">
+                        <div class="tab-content" id="myTabContent">
+                            {% for key, grupo in grupos.items %}
+                            <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="tab-content-{{ key }}" role="tabpanel">
+                                
+                                <h6 class="text-{{ grupo.color }} border-bottom pb-2 mb-3 fw-bold">{{ grupo.titulo }}</h6>
+                                
                                 <div class="row g-3">
-        
-                                    <div class="col-md-6">
-                                        <label class="fw-bold text-nuam">F20: ISFUT Ley 20.780</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_20" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
+                                    <div class="col-12 d-flex px-2 text-muted small fw-bold">
+                                        <div style="width: 50%;">Concepto</div>
+                                        <div style="width: 25%; text-align: center;">Monto ($)</div>
+                                        <div style="width: 25%; text-align: center;">Factor Calc.</div>
                                     </div>
 
-                                    <div class="col-md-6">
-                                        <label class="fw-bold text-nuam">F21: Rentas hasta 31.12.1983</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_21" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
+                                    {% for factor in grupo.factores %}
+                                    <div class="col-12"> <div class="row align-items-center g-1">
+                                            
+                                            <div class="col-6">
+                                                <label for="{{ factor.id }}" class="small mb-0 fw-bold text-secondary" title="{{ factor.ayuda }}">
+                                                    {{ factor.label }}
+                                                </label>
+                                            </div>
+
+                                            <div class="col-3">
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text text-success">$</span>
+                                                    <input type="number" step="0.01" 
+                                                        class="form-control input-monto-calculo text-end fw-bold" 
+                                                        id="{{ factor.id }}" 
+                                                        name="{{ factor.id }}" 
+                                                        placeholder="0">
+                                                </div>
+                                            </div>
+
+                                            <div class="col-3">
+                                                <input type="text" 
+                                                    class="form-control form-control-sm text-end text-muted input-factor-visual" 
+                                                    id="visual_{{ factor.id }}" 
+                                                    readonly 
+                                                    placeholder="0.00000000"
+                                                    style="background-color: #f8f9fa;">
+                                            </div>
                                         </div>
                                     </div>
-
-                                    <div class="col-md-6">
-                                        <label class="fw-bold text-nuam">F22: Rentas Exentas IGC/IA</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_22" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="fw-bold text-nuam">F23: Ingresos No Renta</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_23" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="fw-bold text-nuam">F24: RFE (Art. 82 Letra B)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_24" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="fw-bold text-nuam">F25: Asoc. Rentas Afectas (Sin Der.)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_25" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="fw-bold text-nuam">F26: Asoc. Rentas Afectas (Con Der.)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_26" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="fw-bold text-nuam">F27: Asoc. Rentas Exentas (Sin Der.)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_27" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="fw-bold text-nuam">F28: Asoc. Rentas Exentas (Con Der.)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_28" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="fw-bold text-nuam">F29: Crédito por IPE</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_29" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
+                                    {% endfor %}
                                 </div>
+
                             </div>
-
-                            <div class="tab-pane fade" id="tab-otros">
-                                <div class="row g-3">
-        
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold text-secondary">F30: Asoc. Rentas Afectas (Sin Der.)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_30" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold text-secondary">F31: Asoc. Rentas Afectas (Con Der.)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_31" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold text-secondary">F32: Asoc. Rentas Exentas (Sin Der.)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_32" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold text-secondary">F33: Asoc. Rentas Exentas (Con Der.)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_33" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold text-secondary">F34: Crédito por IPE</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_34" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold text-secondary">F35: Tasa Efectiva FUT (TEF)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_35" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold text-secondary">F36: Tasa Efectiva FUNT (TEX)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_36" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold text-secondary">F37: Devolución Capital (Art 17 N°7)</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" class="form-control input-monto-calculo" oninput="limpiarFactorAsociado(this)">
-                                            <input type="number" step="0.00000001" name="factor_37" class="form-control fw-bold text-end" readonly placeholder="0.00000000">
-                                        </div>
-                                    </div>
-
-                                </div>
-                            </div>
+                            {% endfor %}
                         </div>
 
-                        <div class="modal-footer border-top mt-4 d-flex justify-content-between">
-                            <button type="button" class="btn btn-secondary px-4" onclick="volverAlPaso1()"><i class="bi bi-arrow-left"></i> Volver</button>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-info text-white px-4" onclick="ejecutarCalculoMasivo()"><i class="bi bi-calculator"></i> Calcular</button>
-                                <button type="submit" id="btn-grabar-final" class="btn btn-success px-4" disabled><i class="bi bi-save"></i> Grabar</button>
-                            </div>
-                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light justify-content-between">
+                    <button type="button" class="btn btn-secondary" onclick="cerrarOVolver()" id="btnVolver">Cancelar</button>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-info text-white fw-bold d-none" id="btnCalcular" onclick="ejecutarCalculoMasivo()">
+                            <i class="bi bi-calculator"></i> Calcular Factores
+                        </button>
+
+                        <button type="button" class="btn btn-primary px-4 fw-bold" id="btnSiguiente" onclick="irAlPaso2()">
+                            Siguiente <i class="bi bi-arrow-right"></i>
+                        </button>
+                        
+                        <button type="submit" class="btn btn-success px-4 fw-bold d-none" id="btnGuardar">
+                            <i class="bi bi-save"></i> Guardar Finalizar
+                        </button>
                     </div>
                 </div>
             </form>
@@ -438,59 +281,65 @@
     </div>
 </div>
 
+<div class="modal fade" id="modalEliminar" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{% url 'mantenedor' %}">
+            {% csrf_token %}
+            <input type="hidden" name="accion_eliminar" value="true">
+            <input type="hidden" name="id_seleccionado" id="id_eliminar_input">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white"><h5 class="modal-title">Eliminar</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body text-center"><p>¿Seguro que desea eliminar este registro?</p></div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button><button type="submit" class="btn btn-danger">Sí, Eliminar</button></div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="modal fade" id="modalCargaMasiva" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl"> <div class="modal-content">
-            <form method="POST" action="{% url 'carga_masiva' %}" enctype="multipart/form-data" id="form-carga-masiva">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <form method="POST" action="{% url 'carga_masiva' %}" enctype="multipart/form-data">
                 {% csrf_token %}
-                
                 <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title"><i class="bi bi-file-earmark-spreadsheet"></i> Carga Masiva de Factores</h5>
+                    <h5 class="modal-title"><i class="bi bi-cloud-upload"></i> Carga Masiva de Dividendos</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                
                 <div class="modal-body">
                     <div class="alert alert-light border-success d-flex align-items-center mb-3">
                         <i class="bi bi-info-circle-fill text-success fs-4 me-3"></i>
                         <div>
                             <strong>Instrucciones:</strong>
                             <ul class="mb-0 small text-secondary">
-                                <li>El archivo debe ser formato <strong>.CSV</strong> (separado por punto y coma ; o comas ,).</li>
-                                <li>Debe contener las columnas obligatorias: <strong>Instrumento, Ejercicio, F08...F37</strong>.</li>
-                                <li>El sistema validará el formato antes de permitir la carga.</li>
+                                <li>Formato admitido: <strong>.CSV</strong> (separado por punto y coma ; o comas).</li>
+                                <li>Columnas Obligatorias: <strong>RUT, Instrumento, Fecha, Monto Historico, F08...F37</strong>.</li>
+                                <li>Si no incluye "Factor", se asume 1.0.</li>
                             </ul>
                         </div>
                     </div>
 
                     <div class="mb-4">
-                        <label class="form-label fw-bold">1. Seleccionar Archivo CSV</label>
+                        <label class="form-label fw-bold">Seleccionar Archivo CSV</label>
                         <input type="file" name="archivo_excel" id="input_archivo_csv" class="form-control" accept=".csv" required onchange="previsualizarCSV()">
-                        <div class="form-text text-muted">Seleccione el archivo para generar la vista previa.</div>
                     </div>
 
                     <div id="zona-preview" class="d-none">
-                        <h6 class="fw-bold text-success border-bottom pb-2">2. Vista Previa del Archivo</h6>
+                        <h6 class="fw-bold text-success border-bottom pb-2">Vista Previa</h6>
                         <div class="table-responsive border rounded" style="max-height: 300px; overflow-y: auto;">
-                            <table class="table table-sm table-hover table-striped mb-0 text-nowrap" id="tabla-preview">
-                                <thead class="table-success">
-                                    </thead>
-                                <tbody>
-                                    </tbody>
+                            <table class="table table-sm table-hover table-striped mb-0 text-nowrap small" id="tabla-preview">
+                                <thead class="table-success"></thead>
+                                <tbody></tbody>
                             </table>
                         </div>
-                        <div id="info-registros" class="mt-2 text-end small fw-bold text-secondary"></div>
                     </div>
-
+                    
                     <div id="error-preview" class="alert alert-danger mt-3 d-none">
-                        <i class="bi bi-exclamation-triangle-fill"></i> <span id="msg-error-csv">Error de formato.</span>
+                        <i class="bi bi-exclamation-triangle-fill"></i> <span id="msg-error-csv"></span>
                     </div>
-
                 </div>
-                
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success" id="btn-confirmar-carga" disabled>
-                        <i class="bi bi-cloud-upload"></i> Confirmar y Cargar
-                    </button>
+                    <button type="submit" class="btn btn-success" id="btn-confirmar-carga" disabled>Confirmar Carga</button>
                 </div>
             </form>
         </div>
@@ -498,411 +347,275 @@
 </div>
 
 <script>
-    // --- FUNCIÓN PARA LLENAR MERCADO Y AÑO AUTOMÁTICAMENTE ---
-    function actualizarDatosInstrumento() {
-        // 1. Identificar los elementos
-        const select = document.getElementById('input_instrumento');
-        const inputMercado = document.getElementById('input_mercado'); // Asegúrate que tu input de mercado tenga este ID
-        const inputAnio = document.getElementById('modal_anio');
-        
-        // 2. Obtener la opción que el usuario seleccionó
-        const opcionSeleccionada = select.options[select.selectedIndex];
-        
-        // 3. Leer el dato "escondido" (data-mercado)
-        const nombreMercado = opcionSeleccionada.getAttribute('data-mercado');
-        
-        // 4. Escribir en la casilla de Mercado
-        if (inputMercado) {
-            inputMercado.value = nombreMercado || ''; // Si no hay mercado, dejar vacío
+    // --- LÓGICA DE RUT CHILENO ---
+    function formatearRut(input) {
+        let valor = input.value.replace(/[^0-9kK]/g, "");
+        if (valor.length > 1) {
+            let cuerpo = valor.slice(0, -1);
+            let dv = valor.slice(-1).toUpperCase();
+            input.value = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + dv;
+        } else {
+            input.value = valor;
         }
-
-        // 5. Truco para el Año: Si está vacío, poner el año actual (2025)
-        if (inputAnio && !inputAnio.value) {
-            inputAnio.value = "2025"; 
+    }
+    function validarRutInput(input) {
+        let rut = input.value;
+        if (!Fn.validaRut(rut)) {
+            input.classList.add("is-invalid"); input.classList.remove("is-valid");
+            return false;
+        } else {
+            input.classList.remove("is-invalid"); input.classList.add("is-valid");
+            return true;
+        }
+    }
+    var Fn = {
+        validaRut : function (rutCompleto) {
+            if (!/^[0-9]+[-|‐]{1}[0-9kK]{1}$/.test( rutCompleto ))
+                if (!/^[0-9]+[-|‐]{1}[0-9kK]{1}$/.test( rutCompleto.replace(/\./g, '') )) return false;
+            var tmp = rutCompleto.split('-');
+            if(tmp.length < 2) tmp = rutCompleto.replace(/\./g, '').split('-');
+            var digv = tmp[1]; var rut = tmp[0].replace(/\./g, '');
+            if ( digv == 'K' ) digv = 'k' ;
+            return (Fn.dv(rut) == digv );
+        },
+        dv : function(T){
+            var M=0,S=1;
+            for(;T;T=Math.floor(T/10)) S=(S+T%10*(9-M++%6))%11;
+            return S?S-1:'k';
         }
     }
 
-    // BONUS: Cuando se abre el modal "Nuevo", poner el año 2025 por defecto
-    document.addEventListener('DOMContentLoaded', function() {
-        const btnIngresar = document.querySelector('[data-bs-target="#modalCalificacion"]'); // O el botón azul "+ Ingresar"
-        if(btnIngresar){
-            btnIngresar.addEventListener('click', function(){
-                 // Solo si es nuevo (limpiar mercado y poner año)
-                if(!document.getElementById('input_id_edicion').value) {
-                    document.getElementById('modal_anio').value = "2025";
-                    document.getElementById('input_mercado').value = "";
-                }
-            });
-        }
-    });
-    // 1. VALIDAR MERCADO
-    function validarYAbrirModal() {
-        const filtroMercado = document.getElementById('filtro_mercado');
-        const filtroAnio = document.getElementById('filtro_ejercicio');
-        if (!filtroMercado.value) {
-            alert("⚠️ Debe seleccionar un 'Tipo de Mercado' en los filtros.");
-            filtroMercado.focus();
-            filtroMercado.classList.add('border-danger');
-            return;
-        }
-        filtroMercado.classList.remove('border-danger');
-        document.getElementById('modal_mercado').value = filtroMercado.value;
-        document.getElementById('modal_anio').value = filtroAnio.value || "2025";
-        volverAlPaso1();
-        new bootstrap.Modal(document.getElementById('modalCalificacion')).show();
-    }
+    // --- NAVEGACIÓN WIZARD ACTUALIZADA ---
+    function irAlPaso2() {
+        // Validaciones Paso 1 (Igual que antes)
+        const rut = document.getElementById('inputRut');
+        const inst = document.getElementById('inputInstrumento');
+        const fecha = document.getElementById('inputFechaPago');
+        const hist = document.getElementById('inputMontoHistorico');
 
-    // 2. WIZARD
-    function pasarAlPaso2() {
-        // --- 1. CAPTURAR TODOS LOS CAMPOS ---
-        const selectInst = document.getElementById('input_instrumento');
-        const inputMercado = document.getElementById('input_mercado');
-        const inputAnio = document.getElementById('modal_anio');
-        const inputFecha = document.getElementById('input_fecha_pago');
-        
-        // Usamos querySelector para buscar por 'name' si no tienen ID específico
-        const inputSecuencia = document.querySelector('input[name="secuencia"]');
-        const inputMonto = document.querySelector('input[name="monto_total"]');
-        const inputHistorico = document.querySelector('input[name="valor_historico"]'); // Asegúrate que tu input tenga name="valor_historico"
-        const inputFactorAct = document.querySelector('input[name="factor_actualizacion"]');
-        const inputDescripcion = document.querySelector('textarea[name="descripcion"]'); // O input, según uses
+        if(!rut.value || rut.classList.contains('is-invalid')) { alert("RUT inválido."); rut.focus(); return; }
+        if(!inst.value) { alert("Seleccione Instrumento."); inst.focus(); return; }
+        if(!fecha.value) { alert("Ingrese Fecha."); fecha.focus(); return; }
+        if(parseFloat(hist.value) <= 0) { alert("El monto debe ser > 0."); hist.focus(); return; }
 
-        let errores = false;
-        let mensajeError = "";
-
-        // --- 2. VALIDACIONES DE OBLIGATORIEDAD (NO VACÍOS) ---
-
-        // A. Instrumento
-        if (!selectInst.value) {
-            selectInst.classList.add('is-invalid'); errores = true;
-        } else { selectInst.classList.remove('is-invalid'); }
-
-        // B. Mercado (Automático pero obligatorio)
-        if (!inputMercado.value.trim()) {
-            inputMercado.classList.add('is-invalid'); errores = true;
-            mensajeError = "Falta el Mercado (seleccione un instrumento válido).";
-        } else { inputMercado.classList.remove('is-invalid'); }
-
-        // C. Año
-        if (!inputAnio.value) {
-            inputAnio.classList.add('is-invalid'); errores = true;
-        } else { inputAnio.classList.remove('is-invalid'); }
-
-        // D. Secuencia
-        if (!inputSecuencia.value || parseInt(inputSecuencia.value) <= 10000) {
-            inputSecuencia.classList.add('is-invalid'); 
-            errores = true;
-            
-            // Si es el primer error que encontramos, definimos el mensaje
-            if (!mensajeError) mensajeError = "⚠️ La secuencia debe ser mayor a 10.000.";
-        } else { 
-            inputSecuencia.classList.remove('is-invalid'); 
-        }
-
-        // E. Fecha Pago
-        if (!inputFecha.value) {
-            inputFecha.classList.add('is-invalid'); errores = true;
-        } else { inputFecha.classList.remove('is-invalid'); }
-
-        // F. Factor Actualización (Obligatorio)
-        if (!inputFactorAct || !inputFactorAct.value) {
-            if(inputFactorAct) inputFactorAct.classList.add('is-invalid'); 
-            errores = true;
-        } else { if(inputFactorAct) inputFactorAct.classList.remove('is-invalid'); }
-
-        // G. Descripción (Obligatorio según pediste "todos los campos")
-        if (inputDescripcion && !inputDescripcion.value.trim()) {
-            inputDescripcion.classList.add('is-invalid'); errores = true;
-        } else { if(inputDescripcion) inputDescripcion.classList.remove('is-invalid'); }
-
-
-        // --- 3. VALIDACIONES LÓGICAS (> 0) ---
-
-        // H. Dividendo / Monto Total (> 0)
-        if (!inputMonto.value || parseFloat(inputMonto.value) <= 0) {
-            inputMonto.classList.add('is-invalid');
-            errores = true;
-            // Si estaba vacío ya es error, pero si es <=0 también es error
-        } else {
-            inputMonto.classList.remove('is-invalid');
-        }
-
-        // I. Valor Histórico (> 0)
-        if (!inputHistorico.value || parseFloat(inputHistorico.value) <= 0) {
-            inputHistorico.classList.add('is-invalid');
-            errores = true;
-        } else {
-            inputHistorico.classList.remove('is-invalid');
-        }
-
-        // --- 4. RESULTADO ---
-        if (errores) {
-            // Mensaje genérico o específico
-            if (!mensajeError) mensajeError = "⚠️ Todos los campos son obligatorios y los montos deben ser mayores a 0.";
-            alert(mensajeError);
-            return; // DETIENE EL PROCESO
-        }
-
-        // --- 5. SI PASA TODO, AVANZAR ---
-        
-        // Actualizar Resumen Visual (Cabecera paso 2)
-        const textoInstrumento = selectInst.options[selectInst.selectedIndex].text;
-        document.getElementById('resumen_instrumento').innerText = textoInstrumento;
-        document.getElementById('resumen_anio_txt').innerText = inputAnio.value;
-        document.getElementById('resumen_fecha').innerText = inputFecha.value;
-        document.getElementById('resumen_monto').innerText = inputMonto.value;
-
-        // Cambio de Pantalla (Wizard)
+        // Cambiar vista
         document.getElementById('paso-1-datos').classList.add('d-none');
         document.getElementById('paso-2-factores').classList.remove('d-none');
+        
+        // Ajustar botones
+        document.getElementById('btnSiguiente').classList.add('d-none');
+        document.getElementById('btnGuardar').classList.remove('d-none');
+        document.getElementById('btnCalcular').classList.remove('d-none'); // MOSTRAR BOTÓN CALCULAR
+        
+        document.getElementById('btnVolver').innerText = "Atrás (Datos)";
+        document.getElementById('btnVolver').onclick = volverAlPaso1;
+
+        document.getElementById('lblBaseCalculo').innerText = document.getElementById('inputMontoActualizadoVisual').value;
     }
 
     function volverAlPaso1() {
-        document.getElementById('paso-1-datos').classList.remove('d-none');
         document.getElementById('paso-2-factores').classList.add('d-none');
-    }
-
-    // 3. CÁLCULO Y VALIDACIÓN F08-F16
-    function ejecutarCalculoMasivo() {
-        const montoTotal = parseFloat(document.querySelector('input[name="monto_total"]').value);
-        const inputsMontos = document.querySelectorAll('.input-monto-calculo');
-
-        if (montoTotal > 0) {
-            inputsMontos.forEach(inputMonto => {
-                const monto = parseFloat(inputMonto.value) || 0;
-                const inputFactor = inputMonto.nextElementSibling;
-                if(monto > 0) {
-                    inputFactor.value = (monto / montoTotal).toFixed(8);
-                }
-            });
-        }
-        validarSumaCritica();
-    }
-
-    function validarSumaCritica() {
-        const inputsCriticos = document.querySelectorAll('.factor-suma-critica');
-        let suma = 0;
-        inputsCriticos.forEach(input => suma += parseFloat(input.value) || 0);
-
-        const display = document.getElementById('display-suma-total');
-        const btnGrabar = document.getElementById('btn-grabar-final');
+        document.getElementById('paso-1-datos').classList.remove('d-none');
         
-        display.innerText = suma.toFixed(8);
+        document.getElementById('btnGuardar').classList.add('d-none');
+        document.getElementById('btnCalcular').classList.add('d-none'); // OCULTAR BOTÓN CALCULAR
+        document.getElementById('btnSiguiente').classList.remove('d-none');
+        
+        document.getElementById('btnVolver').innerText = "Cancelar";
+        document.getElementById('btnVolver').onclick = cerrarOVolver;
+    }
 
-        if(suma > 1.00000001) {
-            display.classList.add('text-danger');
-            btnGrabar.disabled = true;
-            alert("⚠️ Suma F08-F16 supera 1.0");
-        } else {
-            display.classList.remove('text-danger');
-            btnGrabar.disabled = false;
+    // --- NUEVA FUNCIÓN DE CÁLCULO ---
+    function ejecutarCalculoMasivo() {
+        // 1. Obtener la base (Monto Actualizado Total)
+        const base = parseFloat(document.getElementById('inputMontoActualizadoVisual').value) || 0;
+
+        if (base <= 0) {
+            alert("⚠️ El monto base actualizado es 0. No se pueden calcular factores.");
+            return;
+        }
+
+        // 2. Recorrer todos los inputs de monto ($)
+        const inputsMonto = document.querySelectorAll('.input-monto-calculo');
+        let contador = 0;
+
+        inputsMonto.forEach(input => {
+            let monto = parseFloat(input.value);
+            // Buscamos el input visual correspondiente (tiene id "visual_fXX")
+            let idVisual = "visual_" + input.id;
+            let inputVisual = document.getElementById(idVisual);
+
+            if (inputVisual) {
+                if (!isNaN(monto) && monto >= 0) {
+                    // CÁLCULO: Monto / Base
+                    let factor = monto / base;
+                    // Mostramos con 8 decimales
+                    inputVisual.value = factor.toFixed(8);
+                    contador++;
+                } else {
+                    inputVisual.value = ""; // Limpiar si no hay monto
+                }
+            }
+        });
+
+        if (contador > 0) {
+            // Feedback visual suave (opcional)
+            alert("✅ Cálculo realizado sobre " + contador + " campos.");
         }
     }
 
-    function limpiarFactorAsociado(input) {
-        input.nextElementSibling.value = "";
-        document.getElementById('btn-grabar-final').disabled = true;
+    function cerrarOVolver() {
+        // Si estamos en modo "Cancelar", cerramos el modal
+        var myModalEl = document.getElementById('modalFormulario');
+        var modal = bootstrap.Modal.getInstance(myModalEl);
+        modal.hide();
     }
 
-    // Selección de Fila
-    function seleccionarFila(fila, id) {
-        fila.querySelector('input[type="radio"]').checked = true;
-        document.getElementById('input_id_seleccionado').value = id;
-        document.querySelectorAll('tr').forEach(tr => tr.classList.remove('table-active'));
-        fila.classList.add('table-active');
+    function validarFormularioFinal() {
+        // Validaciones finales antes de submit
+        return true;
     }
 
-    function confirmarEliminar() {
-        if(!document.getElementById('input_id_seleccionado').value) {
-            alert("Seleccione un registro.");
-            return false;
-        }
-        return confirm("¿Eliminar registro?");
+    function recalcularTotal() {
+        let hist = parseFloat(document.getElementById('inputMontoHistorico').value) || 0;
+        let fact = parseFloat(document.getElementById('inputFactorAct').value) || 1;
+        let total = hist * fact;
+        document.getElementById('inputMontoActualizadoVisual').value = total.toFixed(2);
     }
 
+    function abrirModalCrear() {
+        document.getElementById("formMantenedor").reset();
+        document.getElementById("id_edicion").value = "";
+        document.getElementById("inputVisualId").value = "{{ proximo_id }}";
+        document.getElementById("modalTitulo").innerText = "Nuevo Dividendo";
+        document.getElementById("inputFactorAct").value = "1.000000";
+        document.querySelectorAll('.input-factor').forEach(input => input.value = "");
+        volverAlPaso1(); // Siempre empezar en paso 1
+        var myModal = new bootstrap.Modal(document.getElementById('modalFormulario'));
+        myModal.show();
+    }
+
+    // LISTENER PARA BOTONES EDITAR
     document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('.factor-suma-critica').forEach(input => {
-            input.addEventListener('input', validarSumaCritica);
+        const botonesEditar = document.querySelectorAll('.btn-editar');
+        botonesEditar.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const d = this.dataset;
+                document.getElementById("inputVisualId").value = d.id;
+                document.getElementById("id_edicion").value = d.id;
+                document.getElementById("modalTitulo").innerText = "Editar Dividendo #" + d.id;
+                document.getElementById("inputRut").value = d.rut;
+                document.getElementById("inputInstrumento").value = d.instrumento;
+                document.getElementById("inputFechaPago").value = d.fecha;
+                document.getElementById("inputMontoHistorico").value = parseFloat(d.montoHist).toFixed(2);
+                document.getElementById("inputFactorAct").value = parseFloat(d.factorAct).toFixed(6);
+                document.getElementById("inputDescripcion").value = d.descripcion;
+                document.getElementById("inputIsfut").checked = (d.isfut === 'true');
+                
+                recalcularTotal();
+
+                // Cargar Factores
+                try {
+                    const factoresObj = JSON.parse(d.factores);
+                    const montoTotalFloat = parseFloat(d.montoTotal);
+                    document.querySelectorAll('.input-monto-calculo').forEach(inp => inp.value = "");
+                    document.querySelectorAll('.input-factor-visual').forEach(inp => inp.value = "");
+                    for (const [key, val] of Object.entries(factoresObj)) {
+                        let inputMonto = document.getElementById(key);         // Input $
+                        let inputVisual = document.getElementById("visual_" + key); // Input Factor
+                        
+                        if (inputMonto && inputVisual) {
+                            let factor = parseFloat(val);
+                            if (factor > 0) {
+                                // 1. Llenar Factor Visual (Directo de BD)
+                                inputVisual.value = factor.toFixed(8);
+
+                                // 2. Calcular Monto Inverso ($) para que el usuario pueda editar
+                                if (montoTotalFloat > 0) {
+                                    let montoCalculado = factor * montoTotalFloat;
+                                    inputMonto.value = montoCalculado.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                } catch (e) { console.error(e); }
+
+                volverAlPaso1(); // Empezar en paso 1
+                var myModal = new bootstrap.Modal(document.getElementById('modalFormulario'));
+                myModal.show();
+            });
         });
     });
 
-    // --- LÓGICA DE MODIFICACIÓN (HDU 5) ---
-
-    function iniciarModificacion() {
-        // 1. Obtener ID seleccionado del radio button
-        const id = document.getElementById('input_id_seleccionado').value;
-        
-        if (!id) {
-            alert("⚠️ Por favor, seleccione una fila (círculo) para modificar.");
-            return;
-        }
-
-        // 2. Hacer petición AJAX a Django para obtener los datos
-        // Usamos fetch para llamar a la URL que creamos en el Paso 1
-        fetch(`/obtener-detalle/${id}/`)
-            .then(response => response.json())
-            .then(response => {
-                if (response.status === 'ok') {
-                    llenarModalConDatos(response.data);
-                } else {
-                    alert("Error al cargar datos: " + response.msg);
-                }
-            })
-            .catch(error => console.error('Error:', error));
+    function eliminarRegistro(id) {
+        document.getElementById("id_eliminar_input").value = id;
+        var myModal = new bootstrap.Modal(document.getElementById('modalEliminar'));
+        myModal.show();
     }
 
-    function llenarModalConDatos(data) {
-        // 3. Rellenar los campos del Modal
-        
-        // ID Edición (Critico para que el backend sepa que es update)
-        document.getElementById('input_id_edicion').value = data.id;
-        
-        // Paso 1: Datos Básicos
-        document.getElementById('input_instrumento').value = data.instrumento_id; // Select usa ID
-        document.getElementById('modal_anio').value = data.ejercicio;
-        document.getElementById('input_fecha_pago').value = data.fecha_pago;
-        document.querySelector('input[name="monto_total"]').value = data.monto_total;
-        document.querySelector('textarea[name="descripcion"]').value = data.descripcion;
-        document.querySelector('input[name="secuencia"]').value = data.secuencia;
-        document.querySelector('input[name="factor_actualizacion"]').value = data.factor_actualizacion;
-        document.getElementById('checkIsfut').checked = data.es_isfut;
-
-        // Paso 2: Factores
-        // Llenamos los inputs de factores. Los montos los dejamos vacíos para obligar recálculo si quiere cambiar.
-        document.querySelector('input[name="factor_08"]').value = data.factor_08;
-        document.querySelector('input[name="factor_09"]').value = data.factor_09;
-        document.querySelector('input[name="factor_10"]').value = data.factor_10;
-        // ... Dupla B: Asegúrense de mapear el resto si es necesario ...
-        
-        // Forzamos actualización de validaciones visuales
-        validarSumaCritica();
-
-        // Cambiar Título del Modal
-        document.querySelector('.modal-title').innerText = "Modificar Calificación N° " + data.id;
-
-        // Reseteamos el Wizard al paso 1
-        volverAlPaso1();
-
-        // 4. Abrir Modal
-        new bootstrap.Modal(document.getElementById('modalCalificacion')).show();
-    }
-
-    // IMPORTANTE: Limpiar el ID de edición cuando se cierra el modal o se da a "Nuevo"
-    function validarYAbrirModal() {
-        const filtroMercado = document.getElementById('filtro_mercado');
-        const filtroAnio = document.getElementById('filtro_ejercicio');
-        if (!filtroMercado.value) {
-            alert("⚠️ Debe seleccionar un 'Tipo de Mercado' en los filtros.");
-            filtroMercado.focus();
-            filtroMercado.classList.add('border-danger');
-            return;
-        }
-        filtroMercado.classList.remove('border-danger');
-        document.getElementById('input_id_edicion').value = "";
-        document.querySelector('.modal-title').innerText = "Ingresar Nueva Calificación";
-        document.getElementById('form-ingreso-manual').reset(); // Limpia inputs
-        volverAlPaso1();
-        new bootstrap.Modal(document.getElementById('modalCalificacion')).show();
-    }
-
-    // --- LÓGICA DE PREVISUALIZACIÓN CSV MEJORADA ---
+    // --- LÓGICA DE CARGA MASIVA (PREVIEW) ---
     function previsualizarCSV() {
         const input = document.getElementById('input_archivo_csv');
         const zonaPreview = document.getElementById('zona-preview');
         const tablaHead = document.querySelector('#tabla-preview thead');
         const tablaBody = document.querySelector('#tabla-preview tbody');
         const btnGuardar = document.getElementById('btn-confirmar-carga');
-        const infoRegistros = document.getElementById('info-registros');
+        const divError = document.getElementById('error-preview');
 
-        // Resetear visual
+        // Limpiar
         zonaPreview.classList.add('d-none');
-        document.getElementById('error-preview').classList.add('d-none');
+        divError.classList.add('d-none');
         btnGuardar.disabled = true;
         tablaHead.innerHTML = '';
         tablaBody.innerHTML = '';
 
         if (input.files && input.files[0]) {
             const reader = new FileReader();
-            
             reader.onload = function (e) {
                 const text = e.target.result;
-                const lineas = text.split('\n').filter(linea => linea.trim().length > 0);
+                const lineas = text.split('\n').filter(l => l.trim().length > 0);
                 
                 if (lineas.length < 2) {
-                    mostrarErrorCSV("El archivo está vacío o no tiene datos.");
-                    return;
+                    mostrarError("El archivo está vacío."); return;
                 }
 
+                // Detectar separador (; o ,)
                 const primeraLinea = lineas[0];
+                const separador = (primeraLinea.match(/;/g) || []).length > (primeraLinea.match(/,/g) || []).length ? ';' : ',';
 
-                // 1. DETECCIÓN INTELIGENTE DE SEPARADOR
-                // Contamos qué aparece más en la primera línea: ¿Comas o Punto y Coma?
-                const cuentaComas = (primeraLinea.match(/,/g) || []).length;
-                const cuentaPuntoComa = (primeraLinea.match(/;/g) || []).length;
+                // Encabezados
+                const headers = primeraLinea.split(separador).map(h => h.trim().replace(/^"|"$/g, ''));
                 
-                let separador = ',';
-                if (cuentaPuntoComa > cuentaComas) {
-                    separador = ';';
+                // Validar columna clave
+                if (!headers.some(h => h.toUpperCase().includes('INSTRUMENTO'))) {
+                    mostrarError("Falta la columna 'Instrumento'."); return;
                 }
 
-                console.log("Separador detectado:", separador === ';' ? 'Punto y Coma (;)' : 'Coma (,)');
-
-                // 2. LIMPIEZA DE ENCABEZADOS
-                // Quitamos comillas, espacios al inicio/final y caracteres invisibles
-                const encabezados = primeraLinea.split(separador).map(h => 
-                    h.trim().replace(/^"|"$/g, '').replace(/\r/g, '')
-                );
-
-                console.log("Encabezados leídos:", encabezados); // MIRA LA CONSOLA (F12) SI FALLA
-
-                // 3. VALIDACIÓN FLEXIBLE
-                // Buscamos "F08" (o "f08" o "Factor 08" o "F08 ")
-                const tieneInstrumento = encabezados.some(h => h.toUpperCase().includes('INSTRUMENTO'));
-                
-                // Buscamos F08 específicamente para asegurar que es un archivo de factores
-                const tieneF08 = encabezados.some(h => h.toUpperCase().includes('F08'));
-
-                if (!tieneInstrumento) {
-                    mostrarErrorCSV(`No se encontró la columna 'Instrumento'. Encabezados detectados: ${encabezados.join(', ')}`);
-                    return;
-                }
-                if (!tieneF08) {
-                    mostrarErrorCSV(`No se encontró la columna 'F08'. Revise si el archivo usa ';' o ','. Encabezados: ${encabezados.join(', ')}`);
-                    return;
-                }
-
-                // 4. DIBUJAR TABLA
+                // Dibujar Tabla
                 let htmlHead = '<tr>';
-                encabezados.forEach(enc => htmlHead += `<th>${enc}</th>`);
+                headers.forEach(h => htmlHead += `<th>${h}</th>`);
                 htmlHead += '</tr>';
                 tablaHead.innerHTML = htmlHead;
 
-                let filasMostrar = Math.min(lineas.length - 1, 5);
-                for (let i = 1; i <= filasMostrar; i++) {
-                    const celdas = lineas[i].split(separador);
+                // Dibujar 5 primeras filas
+                for (let i = 1; i < Math.min(lineas.length, 6); i++) {
                     let htmlRow = '<tr>';
-                    celdas.forEach(celda => {
-                        htmlRow += `<td>${celda.trim().replace(/^"|"$/g, '')}</td>`;
-                    });
+                    const celdas = lineas[i].split(separador);
+                    celdas.forEach(c => htmlRow += `<td>${c.trim().replace(/^"|"$/g, '')}</td>`);
                     htmlRow += '</tr>';
                     tablaBody.innerHTML += htmlRow;
                 }
 
                 zonaPreview.classList.remove('d-none');
                 btnGuardar.disabled = false;
-                infoRegistros.innerText = `Vista previa de las primeras ${filasMostrar} filas.`;
             };
-
-            reader.readAsText(input.files[0], "ISO-8859-1");
+            reader.readAsText(input.files[0], "ISO-8859-1"); // Ojo con la codificación
         }
     }
 
-    function mostrarErrorCSV(mensaje) {
-        const divError = document.getElementById('error-preview');
-        document.getElementById('msg-error-csv').innerText = mensaje;
-        divError.classList.remove('d-none');
-        document.getElementById('input_archivo_csv').value = "";
+    function mostrarError(msg) {
+        document.getElementById('msg-error-csv').innerText = msg;
+        document.getElementById('error-preview').classList.remove('d-none');
     }
-
 </script>
 {% endblock %}

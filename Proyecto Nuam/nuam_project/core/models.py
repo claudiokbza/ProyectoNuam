@@ -15,6 +15,13 @@ class Instrumento(models.Model):
 class CalificacionTributaria(models.Model):
     # NOMBRE DEL CAMPO CORREGIDO A 'usuario' PARA QUE COINCIDA CON VIEWS.PY
     usuario = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    rut_propietario = models.CharField(
+        max_length=12, 
+        verbose_name="RUT Propietario", 
+        default="0-0",
+        help_text="RUT de la persona o empresa dueña del dividendo"
+    )
     
     instrumento = models.ForeignKey(Instrumento, on_delete=models.CASCADE)
     ejercicio = models.IntegerField(default=2025)
@@ -24,8 +31,16 @@ class CalificacionTributaria(models.Model):
     factor_actualizacion = models.DecimalField(max_digits=10, decimal_places=6, default=1.0)
     descripcion = models.CharField(max_length=255, blank=True, null=True)
     es_isfut = models.BooleanField(default=False, verbose_name="Acogido a ISFUT/ISIFT")
-    factor_actualizacion = models.DecimalField(max_digits=10, decimal_places=6, default=1.0)
-    monto_total = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    monto_historico = models.DecimalField(
+        max_digits=20, decimal_places=2, default=0, verbose_name="Monto Histórico"
+    )
+    factor_actualizacion = models.DecimalField(
+        max_digits=10, decimal_places=6, default=1.000000
+    )
+    # Este campo 'monto_total' será el MONTO ACTUALIZADO (Histórico * Factor)
+    monto_total = models.DecimalField(
+        max_digits=20, decimal_places=2, default=0, verbose_name="Monto Actualizado"
+    )
     OPCIONES_ORIGEN = [
         ('Corredor', 'Corredor'),
         ('Entidad Prestadora del Servicio', 'Entidad Prestadora del Servicio'),
@@ -72,3 +87,10 @@ class CalificacionTributaria(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # AUTOMATIZACIÓN: Calcular Monto Actualizado antes de guardar
+        # Si el usuario ingresa Histórico y Factor, calculamos el Total automáticamente
+        if self.monto_historico and self.factor_actualizacion:
+            self.monto_total = self.monto_historico * self.factor_actualizacion
+        super().save(*args, **kwargs)

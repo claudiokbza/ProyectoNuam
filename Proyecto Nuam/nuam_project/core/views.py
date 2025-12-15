@@ -7,6 +7,10 @@ from django.db import transaction
 from django.http import JsonResponse
 from decimal import Decimal
 import logging
+from django.shortcuts import render, redirect
+from .models import CalificacionTributaria
+from .utils import obtener_configuracion_certificado 
+from django.db.models import Max
 
 from .models import CalificacionTributaria, Instrumento
 from .utils import procesar_carga_masiva
@@ -101,12 +105,11 @@ def mantenedor_view(request):
     # 1. LOGICA POST (GUARDAR / ELIMINAR)
     if request.method == 'POST':
         
-        # A) ELIMINAR
+        # A) ELIMINAR (Se mantiene igual)
         if 'accion_eliminar' in request.POST:
             id_eliminar = request.POST.get('id_seleccionado')
             if id_eliminar:
                 try:
-                    # NEW LOGIC: Admin borra todo, Usuario solo lo suyo
                     if request.user.is_superuser:
                         obj = CalificacionTributaria.objects.get(id=id_eliminar)
                     else:
@@ -118,72 +121,79 @@ def mantenedor_view(request):
                     messages.error(request, "Error: No se encontró el registro o no tienes permiso.")
             return redirect('mantenedor')
 
-        # B) GUARDAR (CREAR O EDITAR)
+        # B) GUARDAR
         try:
             with transaction.atomic():
                 id_edicion = request.POST.get('id_edicion')
                 
                 if id_edicion:
-                    # EDITAR
-                    # NEW LOGIC: Admin edita cualquiera
                     if request.user.is_superuser:
                         nueva = get_object_or_404(CalificacionTributaria, id=id_edicion)
                     else:
                         nueva = get_object_or_404(CalificacionTributaria, id=id_edicion, usuario=request.user)
-                    
-                    msg_exito = "✅ Calificación modificada correctamente."
                 else:
-                    # CREAR
                     nueva = CalificacionTributaria()
-                    nueva.usuario = request.user # Al crear, el dueño siempre es quien lo crea
+                    nueva.usuario = request.user
                     nueva.origen = 'Corredor'
-                    msg_exito = "✅ Calificación creada correctamente."
 
-                # Datos Maestros
-                inst_id = request.POST.get('instrumento')
-                if not inst_id: raise Exception("Debe seleccionar un instrumento.")
-                
-                nueva.instrumento_id = inst_id
-                nueva.ejercicio = request.POST.get('ejercicio')
+                # --- 1. DATOS NUEVOS ---
+                nueva.rut_propietario = request.POST.get('rut_propietario') # <--- NUEVO
+                nueva.instrumento_id = request.POST.get('instrumento')
+                nueva.ejercicio = request.POST.get('ejercicio') # Lo guardamos aunque no lo mostremos
                 nueva.fecha_pago = request.POST.get('fecha_pago')
                 nueva.descripcion = request.POST.get('descripcion')
-                nueva.monto_total = Decimal(request.POST.get('monto_total') or 0)
                 nueva.secuencia = request.POST.get('secuencia') or 0
-                nueva.factor_actualizacion = Decimal(request.POST.get('factor_actualizacion') or 0)
                 nueva.es_isfut = True if request.POST.get('es_isfut') == 'on' else False
 
-                # Factores (F08-F37)
-                suma_creditos = Decimal(0)
-                for i in range(8, 38):
-                    field = f'factor_{i:02d}'
-                    val = Decimal(request.POST.get(field) or 0)
-                    setattr(nueva, field, val)
-                    
-                    # Validar Suma F08-F16
-                    if 8 <= i <= 16:
-                        suma_creditos += val
+                # --- 2. LÓGICA DE MONTOS ---
+                # Ahora recibimos Monto Histórico y Factor
+                monto_hist = Decimal(request.POST.get('monto_historico') or 0)
+                factor_act = Decimal(request.POST.get('factor_actualizacion') or 1)
+                
+                nueva.monto_historico = monto_hist
+                nueva.factor_actualizacion = factor_act
+                
+                # Calculamos el Actualizado (Base para los factores)
+                monto_actualizado_calc = monto_hist * factor_act
+                nueva.monto_total = monto_actualizado_calc # Guardamos el actualizado en monto_total
 
-                if suma_creditos > Decimal('1.00000001'):
-                    messages.error(request, f"Error: La suma de factores F08-F16 es {suma_creditos} y excede 1.0")
-                    return redirect('mantenedor')
+                # --- 3. CÁLCULO DE FACTORES ---
+                # Factor = Input ($) / Monto Actualizado
+                suma_bases = Decimal(0)
+                for i in range(8, 38):
+                    input_name = f'f{i:02d}'
+                    db_field = f'factor_{i:02d}'
+                    monto_ingresado = Decimal(request.POST.get(input_name) or 0)
+                    
+                    if monto_actualizado_calc > 0:
+                        factor_calculado = monto_ingresado / monto_actualizado_calc
+                    else:
+                        factor_calculado = 0
+                    
+                    setattr(nueva, db_field, factor_calculado)
+                    
+                    if 8 <= i <= 19:
+                        suma_bases += factor_calculado
+
+                if suma_bases > Decimal('1.0001'): 
+                    messages.warning(request, f"Advertencia: Suma de rentas supera 100% ({suma_bases:.4f}).")
 
                 nueva.save()
-                messages.success(request, msg_exito)
+                messages.success(request, "✅ Registro guardado correctamente.")
                 return redirect('mantenedor')
 
         except Exception as e:
-            messages.error(request, f"Error al procesar: {e}")
+            messages.error(request, f"Error: {e}")
             return redirect('mantenedor')
 
     # 2. LOGICA GET (MOSTRAR DATOS)
     
-    # NEW LOGIC: Si es Admin, trae TODOS (.all). Si no, filtra por usuario.
     if request.user.is_superuser:
         calificaciones = CalificacionTributaria.objects.all().order_by('-created_at')
     else:
         calificaciones = CalificacionTributaria.objects.filter(usuario=request.user).order_by('-created_at')
     
-    # Filtros
+    # Filtros (Se mantienen igual)
     q_mercado = request.GET.get('q_mercado')
     q_origen = request.GET.get('q_origen')
     q_ejercicio = request.GET.get('q_ejercicio')
@@ -196,10 +206,20 @@ def mantenedor_view(request):
         calificaciones = calificaciones.filter(ejercicio=q_ejercicio)
 
     instrumentos = Instrumento.objects.all().order_by('codigo')
+    # 🔴 AGREGAR ESTE BLOQUE: CALCULAR EL PRÓXIMO ID 🔴
+    max_id_dict = CalificacionTributaria.objects.aggregate(Max('id'))
+    max_id = max_id_dict['id__max'] or 0
+    proximo_id = max_id + 1
+
+    # 🔴 4. INYECTAR LA CONFIGURACIÓN DE GRUPOS
+    grupos_certificado = obtener_configuracion_certificado()
 
     return render(request, 'core/mantenedor.html', {
         'calificaciones': calificaciones,
-        'instrumentos': instrumentos
+        'instrumentos': instrumentos,
+        'grupos': grupos_certificado, 
+        'rango_factores': range(8, 38),
+        'proximo_id': proximo_id
     })
 
 # --- VISTA CARGA MASIVA ---
