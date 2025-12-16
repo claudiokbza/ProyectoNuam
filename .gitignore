@@ -7,6 +7,7 @@ env/
 
 # Ignorar base de datos local (Opcional, pero recomendado)
 db.sqlite3
+*.sqlite3
 
 # Ignorar archivos compilados de Python
 __pycache__/
