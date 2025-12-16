@@ -17,7 +17,7 @@
             </button>
             
             <button type="button" class="btn btn-primary btn-lg shadow-sm" onclick="abrirModalCrear()">
-                <i class="bi bi-plus-circle"></i> Nuevo Dividendo
+                <i class="bi bi-plus-circle"></i> Nueva Calificación
             </button>
         </div>
     </div>
@@ -68,9 +68,9 @@
                             {% endif %}
 
                             <td class="text-center">{{ c.fecha_pago|date:"d/m/Y" }}</td>
-                            <td class="text-end text-muted">${{ c.monto_historico|intcomma }}</td>
+                            <td class="text-end text-muted">${{ c.monto_historico|floatformat:0|intcomma }}</td>
                             <td class="text-center">{{ c.factor_actualizacion|floatformat:6 }}</td>
-                            <td class="text-end text-success fw-bold bg-light">${{ c.monto_total|intcomma }}</td>
+                            <td class="text-end text-success fw-bold bg-light">${{ c.monto_total|floatformat:0|intcomma }}</td>
                             <td class="text-center">{% if c.es_isfut %}<span class="badge bg-success">SI</span>{% else %}-{% endif %}</td>
                             
                             <td class="text-center">
@@ -157,7 +157,7 @@
                                 <label class="form-label fw-bold text-primary">Monto Histórico ($)</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
-                                    <input type="number" step="0.01" name="monto_historico" id="inputMontoHistorico" class="form-control fw-bold" required onchange="recalcularTotal()">
+                                    <input type="number" step="1" name="monto_historico" id="inputMontoHistorico" class="form-control fw-bold" required onchange="recalcularTotal()">
                                 </div>
                             </div>
                             <div class="col-md-3">
@@ -168,7 +168,7 @@
                                 <label class="form-label fw-bold text-success">Monto Actualizado (Base)</label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-success text-white">$</span>
-                                    <input type="number" step="0.01" id="inputMontoActualizadoVisual" class="form-control fw-bold bg-white text-success" readonly>
+                                    <input type="number" step="1" id="inputMontoActualizadoVisual" class="form-control fw-bold bg-white text-success" readonly>
                                 </div>
                             </div>
 
@@ -476,11 +476,58 @@
         return true;
     }
 
+
+
+    // --- FUNCIÓN HELPER PARA FORMATO CHILENO ---
+    const formateadorPesos = new Intl.NumberFormat('es-CL', {
+        style: 'decimal',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    });
+
     function recalcularTotal() {
         let hist = parseFloat(document.getElementById('inputMontoHistorico').value) || 0;
         let fact = parseFloat(document.getElementById('inputFactorAct').value) || 1;
-        let total = hist * fact;
-        document.getElementById('inputMontoActualizadoVisual').value = total.toFixed(2);
+        
+        // CÁLCULO: Redondear a cero decimales
+        let total = Math.round(hist * fact);
+        
+        // Guardamos el valor limpio en el input (o en un hidden si fuera necesario submitir)
+        // Pero para el visual readonly, usamos formato con puntos:
+        document.getElementById('inputMontoActualizadoVisual').value = formateadorPesos.format(total);
+        
+        // Guardamos el valor numérico real en un atributo data para usarlo en cálculos matemáticos
+        document.getElementById('inputMontoActualizadoVisual').dataset.valorReal = total;
+    }
+
+    function ejecutarCalculoMasivo() {
+        // Obtenemos la base desde el dataset (número limpio) o limpiando el formato visual
+        let valVisual = document.getElementById('inputMontoActualizadoVisual').value;
+        // Quitamos puntos para poder dividir matemáticamente
+        let base = parseFloat(valVisual.replace(/\./g, '')) || 0;
+
+        if (base <= 0) {
+            alert("⚠️ El monto base es 0."); return;
+        }
+
+        const inputsMonto = document.querySelectorAll('.input-monto-calculo');
+        let contador = 0;
+
+        inputsMonto.forEach(input => {
+            let monto = parseFloat(input.value); // El input type="number" entrega valor limpio
+            let idVisual = "visual_" + input.id;
+            let inputVisual = document.getElementById(idVisual);
+
+            if (inputVisual) {
+                if (!isNaN(monto) && monto >= 0) {
+                    let factor = monto / base;
+                    inputVisual.value = factor.toFixed(8); // Factor mantiene decimales
+                    contador++;
+                } else {
+                    inputVisual.value = "";
+                }
+            }
+        });
     }
 
     function abrirModalCrear() {
@@ -501,25 +548,36 @@
         botonesEditar.forEach(btn => {
             btn.addEventListener('click', function() {
                 const d = this.dataset;
+                
+                // Cargar IDs y Textos
                 document.getElementById("inputVisualId").value = d.id;
                 document.getElementById("id_edicion").value = d.id;
                 document.getElementById("modalTitulo").innerText = "Editar Dividendo #" + d.id;
                 document.getElementById("inputRut").value = d.rut;
                 document.getElementById("inputInstrumento").value = d.instrumento;
                 document.getElementById("inputFechaPago").value = d.fecha;
-                document.getElementById("inputMontoHistorico").value = parseFloat(d.montoHist).toFixed(2);
+                
+                // 🔴 CAMBIO 1: Cargar Monto Histórico SIN decimales (.toFixed(0))
+                document.getElementById("inputMontoHistorico").value = parseFloat(d.montoHist).toFixed(0);
+                
+                // Factor sí lleva decimales (6)
                 document.getElementById("inputFactorAct").value = parseFloat(d.factorAct).toFixed(6);
+                
                 document.getElementById("inputDescripcion").value = d.descripcion;
                 document.getElementById("inputIsfut").checked = (d.isfut === 'true');
                 
+                // Recalcular para que aparezcan los puntos de miles en el visual
                 recalcularTotal();
 
                 // Cargar Factores
                 try {
                     const factoresObj = JSON.parse(d.factores);
                     const montoTotalFloat = parseFloat(d.montoTotal);
+                    
+                    // Limpiar inputs
                     document.querySelectorAll('.input-monto-calculo').forEach(inp => inp.value = "");
                     document.querySelectorAll('.input-factor-visual').forEach(inp => inp.value = "");
+                    
                     for (const [key, val] of Object.entries(factoresObj)) {
                         let inputMonto = document.getElementById(key);         // Input $
                         let inputVisual = document.getElementById("visual_" + key); // Input Factor
@@ -530,17 +588,18 @@
                                 // 1. Llenar Factor Visual (Directo de BD)
                                 inputVisual.value = factor.toFixed(8);
 
-                                // 2. Calcular Monto Inverso ($) para que el usuario pueda editar
+                                // 2. Calcular Monto Inverso ($)
                                 if (montoTotalFloat > 0) {
                                     let montoCalculado = factor * montoTotalFloat;
-                                    inputMonto.value = montoCalculado.toFixed(2);
+                                    // 🔴 CAMBIO 2: Mostrar monto calculado SIN decimales
+                                    inputMonto.value = montoCalculado.toFixed(0);
                                 }
                             }
                         }
                     }
                 } catch (e) { console.error(e); }
 
-                volverAlPaso1(); // Empezar en paso 1
+                volverAlPaso1(); 
                 var myModal = new bootstrap.Modal(document.getElementById('modalFormulario'));
                 myModal.show();
             });

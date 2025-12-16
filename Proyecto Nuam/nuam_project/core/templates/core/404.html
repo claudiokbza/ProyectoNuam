@@ -1,0 +1,14 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="d-flex flex-column align-items-center justify-content-center vh-100 text-center">
+    
+    <h1 class="display-1 fw-bold text-primary">404</h1>
+    <h2 class="mb-4">Página no encontrada</h2>
+    <p class="lead text-muted">Lo sentimos, la ruta que buscas no existe en Nuam Exchange.</p>
+    
+    <a href="{% url 'mantenedor' %}" class="btn btn-primary btn-lg mt-3">
+        <i class="bi bi-house-door"></i> Volver al Inicio
+    </a>
+</div>
+{% endblock %}
