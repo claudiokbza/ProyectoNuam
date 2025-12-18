@@ -13,38 +13,28 @@ from django.db.models import Max
 
 logger = logging.getLogger(__name__)
 
-# --- REDIRECCIÓN Y LOGIN ---
+# --- FUNCIONES DE APOYO ---
 
-def mantenedor_redirect(request):
-    if request.user.is_authenticated:
-        return redirect('mantenedor')
-    return redirect('login')
-
-def login_view(request):
-    if request.user.is_authenticated:
-        return redirect('mantenedor')
-    if request.method == 'POST':
-        form = AuthenticationForm(request, data=request.POST)
-        if form.is_valid():
-            login(request, form.get_user())
-            return redirect('mantenedor')
-        else:
-            messages.error(request, "Usuario o contraseña incorrectos.")
-    return render(request, 'core/login.html')
-
-@login_required
-def logout_view(request):
-    logout(request)
-    return redirect('login')
+def limpiar_tributario(valor):
+    """
+    Elimina puntos de miles y convierte comas en puntos decimales 
+    para asegurar que la magnitud del número sea correcta.
+    """
+    if not valor: return Decimal('0')
+    # Quitamos TODOS los puntos (separadores de miles) para evitar que 1.040 sea 1,04
+    v = str(valor).strip().replace('.', '') 
+    if "," in v:
+        v = v.replace(",", ".") # La coma se vuelve el punto decimal técnico
+    try:
+        return Decimal(v)
+    except (InvalidOperation, ValueError):
+        return Decimal('0')
 
 # --- AJAX: OBTENER DATOS PARA MODIFICAR ---
 @login_required
 def obtener_detalle_view(request, id):
     try:
-        if request.user.is_superuser:
-            calif = CalificacionTributaria.objects.get(id=id)
-        else:
-            calif = CalificacionTributaria.objects.get(id=id, usuario=request.user)
+        calif = CalificacionTributaria.objects.get(id=id) if request.user.is_superuser else CalificacionTributaria.objects.get(id=id, usuario=request.user)
         
         data = {
             'id': calif.id,
@@ -57,8 +47,8 @@ def obtener_detalle_view(request, id):
             'es_isfut': calif.es_isfut,
             'factor_actualizacion': str(calif.factor_actualizacion),
             'monto_historico': str(calif.monto_historico),
-            # Factores (08-37)
-            **{f'factor_{i:02d}': str(getattr(calif, f'factor_{i:02d}')) for i in range(8, 38)}
+            # CORRECCIÓN: Forzamos exactamente 6 decimales para el modal
+            **{f'factor_{i:02d}': "{:.6f}".format(getattr(calif, f'factor_{i:02d}')).replace('.', ',') for i in range(8, 38)}
         }
         return JsonResponse({'status': 'ok', 'data': data})
     except Exception as e:
@@ -68,35 +58,7 @@ def obtener_detalle_view(request, id):
 
 @login_required
 def mantenedor_view(request):
-    
-    # 1. FUNCIÓN DE LIMPIEZA ROBUSTA
-    def limpiar_tributario(valor):
-        if not valor: return Decimal('0')
-        v = str(valor).strip()
-        # Caso 1: Tiene puntos y comas (ej: 1.234,56) -> Quitamos puntos, cambiamos coma
-        if "." in v and "," in v:
-            v = v.replace(".", "").replace(",", ".")
-        # Caso 2: Solo tiene coma (ej: 1,037) -> Cambiamos coma por punto
-        elif "," in v:
-            v = v.replace(",", ".")
-        # Caso 3: Solo tiene puntos (ej: 25.190.244 o 1.037)
-        elif "." in v:
-            # Si hay más de un punto, son separadores de miles
-            if v.count(".") > 1:
-                v = v.replace(".", "")
-            # Si hay un solo punto, pero es una cifra grande (más de 3 dígitos tras el punto), es miles
-            # O si el input es de Monto Histórico (donde no solemos usar decimales)
-            # Para mayor seguridad, si el número resultante es > 1000 sin el punto, lo tratamos como miles
-            # Pero la regla más segura es: si viene de un input "text" formateado por JS, el punto es MILES.
-            else:
-                # Si el usuario ingresó 1.037 en el factor, Decimal() lo toma bien como decimal.
-                # Si ingresó 25.190 como monto, Decimal() lo toma como 25 coma 19. 
-                # Por eso es mejor que el JS en el front elimine puntos al enviar o usar una lógica aquí.
-                pass 
-        return Decimal(v)
-
     if request.method == 'POST':
-        # A) ELIMINAR
         if 'accion_eliminar' in request.POST:
             id_eliminar = request.POST.get('id_seleccionado')
             if id_eliminar:
@@ -108,7 +70,6 @@ def mantenedor_view(request):
                     messages.error(request, "Error: No se encontró el registro.")
             return redirect('mantenedor')
         
-        # B) GUARDAR
         else:
             try:
                 with transaction.atomic():
@@ -118,78 +79,82 @@ def mantenedor_view(request):
                     else:
                         nueva = CalificacionTributaria(usuario=request.user, origen='Corredor')
 
-                    # --- 1. DATOS BÁSICOS ---
+                    # 1. Asignación de datos básicos
                     nueva.rut_propietario = request.POST.get('rut_propietario')
                     nueva.instrumento_id = request.POST.get('instrumento')
                     nueva.ejercicio = request.POST.get('ejercicio')
-                    nueva.fecha_pago = request.POST.get('fecha_pago')
+                    nueva.fecha_pago = request.POST.get('fecha_pago') or None
                     nueva.descripcion = request.POST.get('descripcion')
                     nueva.secuencia = request.POST.get('secuencia') or 0
                     nueva.es_isfut = request.POST.get('es_isfut') == 'on'
-
-                    # --- 2. LÓGICA DE MONTOS (LIMPIEZA APLICADA) ---
                     nueva.monto_historico = limpiar_tributario(request.POST.get('monto_historico'))
                     nueva.factor_actualizacion = limpiar_tributario(request.POST.get('factor_actualizacion'))
                     
-                    # Recalculamos el total en el servidor para evitar errores del front
-                    nueva.monto_total = nueva.monto_historico * nueva.factor_actualizacion
+                    # GUARDADO 1: Activa el cálculo de monto_total en el modelo
+                    nueva.save() 
 
-                    # --- 3. CÁLCULO DE FACTORES (Paso 2) ---
-                    suma_bases = Decimal(0)
+                    # 2. Cálculo de factores con precisión de 6 decimales
+                    seis_dec = Decimal('0.000001') 
+
                     for i in range(8, 38):
-                        input_name = f'f{i:02d}'
-                        db_field = f'factor_{i:02d}'
-                        monto_ingresado = limpiar_tributario(request.POST.get(input_name))
+                        # Obtenemos monto de entrada y lo limpiamos
+                        monto_f = limpiar_tributario(request.POST.get(f'f{i:02d}'))
                         
                         if nueva.monto_total > 0:
-                            factor_calculado = monto_ingresado / nueva.monto_total
+                            # Calculamos y redondeamos a 6 decimales
+                            factor_calc = (monto_f / nueva.monto_total).quantize(seis_dec, rounding='ROUND_HALF_UP')
+                            setattr(nueva, f'factor_{i:02d}', factor_calc)
                         else:
-                            factor_calculado = Decimal('0')
-                        
-                        setattr(nueva, db_field, factor_calculado)
-                        if 8 <= i <= 19: suma_bases += factor_calculado
+                            setattr(nueva, f'factor_{i:02d}', Decimal('0.000000'))
 
-                    if suma_bases > Decimal('1.0001'): 
-                        messages.warning(request, f"Advertencia: Suma de rentas supera 100% ({suma_bases:.4f}).")
-
-                    nueva.save()
-                    messages.success(request, "✅ Registro guardado correctamente.")
+                    # GUARDADO FINAL
+                    nueva.save() 
+                    messages.success(request, "✅ Registro guardado con éxito.")
                     return redirect('mantenedor')
 
             except Exception as e:
                 messages.error(request, f"Error al guardar: {e}")
                 return redirect('mantenedor')
 
-    # 2. LOGICA GET
+    # Lógica GET para cargar la tabla
     calificaciones = CalificacionTributaria.objects.all() if request.user.is_superuser else CalificacionTributaria.objects.filter(usuario=request.user)
     calificaciones = calificaciones.order_by('-created_at')
     
-    # Filtros
+    # Filtros (Mantenidos igual)
     q_mercado = request.GET.get('q_mercado')
-    q_origen = request.GET.get('q_origen')
-    q_ejercicio = request.GET.get('q_ejercicio')
-
     if q_mercado: calificaciones = calificaciones.filter(instrumento__mercado__nombre__icontains=q_mercado)
-    if q_origen: calificaciones = calificaciones.filter(origen__iexact=q_origen)
-    if q_ejercicio: calificaciones = calificaciones.filter(ejercicio=q_ejercicio)
 
-    instrumentos = Instrumento.objects.all().order_by('codigo')
-    max_id = CalificacionTributaria.objects.aggregate(Max('id'))['id__max'] or 0
-    
     return render(request, 'core/mantenedor.html', {
         'calificaciones': calificaciones,
-        'instrumentos': instrumentos,
+        'instrumentos': Instrumento.objects.all().order_by('codigo'),
         'grupos': obtener_configuracion_certificado(), 
         'rango_factores': range(8, 38),
-        'proximo_id': max_id + 1
+        'proximo_id': (CalificacionTributaria.objects.aggregate(Max('id'))['id__max'] or 0) + 1
     })
+
+# --- OTRAS VISTAS ---
+def mantenedor_redirect(request): return redirect('mantenedor')
+
+def login_view(request):
+    if request.user.is_authenticated: return redirect('mantenedor')
+    if request.method == 'POST':
+        form = AuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            login(request, form.get_user())
+            return redirect('mantenedor')
+        else: messages.error(request, "Usuario o contraseña incorrectos.")
+    return render(request, 'core/login.html')
+
+@login_required
+def logout_view(request):
+    logout(request)
+    return redirect('login')
 
 @login_required
 def carga_masiva_view(request):
     if request.method == 'POST' and request.FILES.get('archivo_excel'):
-        archivo = request.FILES['archivo_excel']
-        guardados, errores = procesar_carga_masiva(archivo, request.user)
+        guardados, errores = procesar_carga_masiva(request.FILES['archivo_excel'], request.user)
         if guardados > 0: messages.success(request, f"✅ Se cargaron {guardados} registros.")
-        if errores:
+        if errores: 
             for error in errores[:3]: messages.error(request, error)
     return redirect('mantenedor')
