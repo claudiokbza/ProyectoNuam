@@ -143,10 +143,10 @@ def obtener_configuracion_certificado():
             "titulo": "1. RENTAS AFECTAS A IMPUESTOS",
             "color": "primary",
             "factores": [
-                {"id": "f08", "label": "F08 - Con Crédito c/Restitución (14 A)", "ayuda": "Monto base para grandes empresas (27%)."},
-                {"id": "f09", "label": "F09 - Con Crédito s/Restitución (Pyme)", "ayuda": "Monto base Pyme o Histórico."},
-                {"id": "f10", "label": "F10 - Con Crédito Voluntario", "ayuda": "Crédito pagado voluntariamente."},
-                {"id": "f11", "label": "F11 - Sin Derecho a Crédito", "ayuda": "Renta afecta pura."},
+                {"id": "f08", "label": "F08 - CON CRÉDITO POR IDPC GENERADOS A CONTAR DEL 01.01.2017", "ayuda": "Monto base para grandes empresas (27%)."},
+                {"id": "f09", "label": "F09 - CON CRÉDITO POR IDPC  ACUMULADOS  HASTA EL 31.12.2016", "ayuda": "Monto base Pyme o Histórico."},
+                {"id": "f10", "label": "F10 - CON DERECHO A CRÉDITO POR PAGO DE IDPC VOLUNTARIO", "ayuda": "Crédito pagado voluntariamente."},
+                {"id": "f11", "label": "F11 - SIN DERECHO A CRÉDITO", "ayuda": "Renta afecta pura."},
             ]
         },
 
@@ -157,14 +157,14 @@ def obtener_configuracion_certificado():
             "titulo": "2. RENTAS EXENTAS / TRIBUTACIÓN CUMPLIDA",
             "color": "success",
             "factores": [
-                {"id": "f12", "label": "F12 - RAP (Rentas Atribuidas)", "ayuda": "Deuda pagada (2017-2019)."},
-                {"id": "f13", "label": "F13 - Rentas Presuntas / Otras", "ayuda": "Otras rentas cumplidas."},
-                {"id": "f14", "label": "F14 - Rentas Desproporcionadas", "ayuda": "Distribución desigual (Art 14A N°9)."},
-                {"id": "f15", "label": "F15 - ISFUT (Ley 20.780)", "ayuda": "FUT Histórico sustitutivo."},
-                {"id": "f16", "label": "F16 - ISFUT (Ley 21.210)", "ayuda": "ISFUT Nuevo (Caso 3)."},
-                {"id": "f17", "label": "F17 - Rentas Exentas IGC", "ayuda": "Exentas por ley."},
-                {"id": "f18", "label": "F18 - Zonas Extremas", "ayuda": "Leyes regionales."},
-                {"id": "f19", "label": "F19 - Ingresos No Renta", "ayuda": "Devolución de Capital."},
+                {"id": "f12", "label": "F12 - RENTAS PROVENIENTES DEL REGISTRO RAP Y DIFERENCIA INICIAL DE SOCIEDAD ACOGIDA AL EX ART. 14 TER A) LIR", "ayuda": "Deuda pagada (2017-2019)."},
+                {"id": "f13", "label": "F13 - OTRAS RENTAS PERCIBIDAS SIN PRIORIDAD EN SU ORDEN DE IMPUTACIÓN", "ayuda": "Otras rentas cumplidas."},
+                {"id": "f14", "label": "F14 - EXCESO DISTRIBUCIONES DESPROPORCIONADAS (N°9 ART.14 A)", "ayuda": "Distribución desigual (Art 14A N°9)."},
+                {"id": "f15", "label": "F15 - UTILIDADES AFECTADAS CON IMPUESTO SUSTITUTIVO AL FUT (ISFUT) LEY N°20.780", "ayuda": "FUT Histórico sustitutivo."},
+                {"id": "f16", "label": "F16 - RENTAS GENERADAS HASTA EL 31.12.1983 Y/O UTILIDADES AFECTADAS CON IMPUESTO SUSTITUTIVO AL FUT (ISFUT) LEY N°21.21", "ayuda": "ISFUT Nuevo (Caso 3)."},
+                {"id": "f17", "label": "F17 - RENTAS EXENTAS DE IMPUESTO GLOBAL COMPLEMENTARIO (IGC) (ARTÍCULO 11, LEY 18.401), AFECTAS A IMPUESTO ADICIONAL", "ayuda": "Exentas por ley."},
+                {"id": "f18", "label": "F18 - RENTAS EXENTAS DE IMPUESTO GLOBAL COMPLEMENTARIO (IGC) Y/O IMPUESTO ADICIONAL (IA)", "ayuda": "Leyes regionales."},
+                {"id": "f19", "label": "F19 - INGRESOS NO CONSTITUTIVOS DE RENTA", "ayuda": "Devolución de Capital."},
             ]
         },
 
@@ -172,15 +172,18 @@ def obtener_configuracion_certificado():
         # 3. CRÉDITOS (SAC y OTROS)
         # ----------------------------------------------------------------------
         "SECCION_4_CREDITOS": {
-            "titulo": "3. CRÉDITOS (Cupón de Descuento)",
+            "titulo": "3. CRÉDITOS (Desde 2017)",
             "color": "warning",
             "factores": [
-                {"id": "f20", "label": "F20 - No Suj. Restitución (< 2019)", "ayuda": "Saldo antiguo SAC."},
-                {"id": "f21", "label": "F21 - No Suj. Restitución (> 2020)", "ayuda": "Crédito Pyme (100%)."},
-                {"id": "f22", "label": "F22 - Crédito Tasa Adicional (Ex Art.21)", "ayuda": "Impuesto castigo pagado por la empresa."}, # <-- AQUÍ ESTÁ EL F22
-                {"id": "f25", "label": "F25 - Sujetos a Restitución (14 A)", "ayuda": "Crédito 27% (Devuelve 35%)."},
-                {"id": "f27", "label": "F27 - Restitución (Exentas)", "ayuda": "Asociado a rentas exentas."},
-                {"id": "f30", "label": "F30 - Crédito IPE", "ayuda": "Impuesto Extranjero."},
+                {"id": "f20", "label": "F20 - No Suj. Restitución sin Derecho a Devolución (Hasta 2019)", "ayuda": "Saldo antiguo SAC."},
+                {"id": "f21", "label": "F21 - No Suj. Restitución con Derecho a Devolución (Hasta 2019)", "ayuda": "Saldo antiguo SAC."},
+                {"id": "f22", "label": "F22 - No Suj. Restitución sin Derecho a Devolución (Desde 2020)", "ayuda": "Crédito Pyme (100%)."},
+                {"id": "f23", "label": "F23 - No Suj. Restitución con Derecho a Devolución (Desde 2020)", "ayuda": "Crédito Pyme (100%)."},
+                {"id": "f24", "label": "F24 - Sujetos a Restitución (14 A) sin Derecho a Devolución", "ayuda": "Crédito 27% (Devuelve 35%)."},
+                {"id": "f25", "label": "F25 - Sujetos a Restitución (14 A) con Derecho a Devolución", "ayuda": "Crédito 27% (Devuelve 35%)."},
+                {"id": "f26", "label": "F26 - Sujetos a Restitución (Exentas)", "ayuda": "Asociado a rentas exentas."},
+                {"id": "f27", "label": "F27 - Sujetos a Restitución (Exentas)", "ayuda": "Asociado a rentas exentas."},
+                {"id": "f28", "label": "F28 - Crédito IPE", "ayuda": "Impuesto Extranjero."},
                 {"id": "f31", "label": "F31 - Crédito Art. 33 Bis", "ayuda": "Activo Fijo."},
             ]
         },
@@ -192,10 +195,13 @@ def obtener_configuracion_certificado():
             "titulo": "4. CRÉDITOS HISTÓRICOS (Hasta 2016)",
             "color": "secondary",
             "factores": [
-                {"id": "f26", "label": "F26 - Sin Devolución (Afectos)", "ayuda": "Solo para pago."},
-                {"id": "f28", "label": "F28 - Sin Devolución (Exentos)", "ayuda": "Asociado a exentas."},
-                {"id": "f29", "label": "F29 - Con Devolución (Afectos)", "ayuda": "Se devuelve en efectivo."},
-                {"id": "f32", "label": "F32 - Con Devolución (Exentos)", "ayuda": "Asociado a exentas."},
+                {"id": "f29", "label": "F29 - Asociado a  Rentas Afectas sin Derecho a Devolución", "ayuda": "Solo para pago impuestos."},
+                {"id": "f30", "label": "F30 - Asociado a  Rentas Afectas con Derecho a Devolución", "ayuda": "Se devuelve en efectivo."},
+                {"id": "f31", "label": "F31 - Asociado a  Rentas Exentas sin Derecho a Devolución", "ayuda": "Solo para pago impuestos."},
+                {"id": "f32", "label": "F32 - Asociado a  Rentas Exentas con Derecho a Devolución", "ayuda": "Se devuelve en efectivo."},
+                {"id": "f33", "label": "F33 - Crédito IPE", "ayuda": "Impuesto Extranjero."},
+                {"id": "f34", "label": "F34 - Credito por Impuesto Tasa Adicional (Ex Art.21)", "ayuda": "Impuesto castigo pagado por la empresa."},
+
             ]
         },
 
@@ -206,13 +212,9 @@ def obtener_configuracion_certificado():
             "titulo": "5. INFORMACIÓN DE SALDOS Y EXCESOS",
             "color": "info",
             "factores": [
-                {"id": "f23", "label": "F23 - Saldo FUT / STUT", "ayuda": "Utilidad antigua pendiente."},
-                {"id": "f24", "label": "F24 - Saldo SAC Total", "ayuda": "Total créditos disponibles."},
-                {"id": "f33", "label": "F33 - Exceso Retiros (Del Ejercicio)", "ayuda": "Retiro mayor a la utilidad de este año."},
-                {"id": "f34", "label": "F34 - Saldo Excesos (Ejercicio Anterior)", "ayuda": "Deuda de excesos que viene del año pasado."}, # <-- F34
-                {"id": "f35", "label": "F35 - Imputación de Excesos", "ayuda": "Excesos cubiertos con utilidad de este año."}, # <-- F35
-                {"id": "f36", "label": "F36 - Saldo Excesos (Pendiente Final)", "ayuda": "Exceso que queda debiendo para el próximo año."}, # <-- F36
-                {"id": "f37", "label": "F37 - Devolución Capital (Art 17 N7)", "ayuda": "Monto informativo de capital."},
+                {"id": "f35", "label": "F35 - Tasa Efec. Crédito FUT (TEF)", "ayuda": "Tasa Efectiva del Crédito del FUT. Se usa para asignar créditos antiguos."}, # <-- F35
+                {"id": "f36", "label": "F36 - Tasa Efec. Crédito FUNT (TEX)", "ayuda": "Tasa Efectiva del Crédito del FUNT (Ingresos No Renta)."}, # <-- F36
+                {"id": "f37", "label": "F37 - Devolución Capital (Art 17 N°7)", "ayuda": "Cantidades que NO constituyen renta (Devolución de capital real)."},
             ]
         }
     }

@@ -68,9 +68,9 @@
                             {% endif %}
 
                             <td class="text-center">{{ c.fecha_pago|date:"d/m/Y" }}</td>
-                            <td class="text-end text-muted">${{ c.monto_historico|floatformat:0|intcomma }}</td>
-                            <td class="text-center">{{ c.factor_actualizacion|floatformat:6 }}</td>
-                            <td class="text-end text-success fw-bold bg-light">${{ c.monto_total|floatformat:0|intcomma }}</td>
+                            <td class="text-end">${{ c.monto_historico|floatformat:0|intcomma }}</td>
+                            <td class="text-center">{{ c.factor_actualizacion|floatformat:6|intcomma }}</td>
+                            <td class="text-end fw-bold text-success">${{ c.monto_total|floatformat:0|intcomma }}</td>
                             <td class="text-center">{% if c.es_isfut %}<span class="badge bg-success">SI</span>{% else %}-{% endif %}</td>
                             
                             <td class="text-center">
@@ -157,21 +157,43 @@
                                 <label class="form-label fw-bold text-primary">Monto Histórico ($)</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
-                                    <input type="number" step="1" name="monto_historico" id="inputMontoHistorico" class="form-control fw-bold" required onchange="recalcularTotal()">
+                                    <input type="text" 
+                                        name="monto_historico" 
+                                        id="inputMontoHistorico" 
+                                        class="form-control fw-bold" 
+                                        placeholder="0" 
+                                        required 
+                                        oninput="formatearMiles(this); recalcularTotal();" 
+                                        onblur="recalcularTotal()"> 
                                 </div>
+                                <small class="text-muted">Valor del cheque original</small>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Factor Actualización</label>
-                                <input type="number" step="0.000001" name="factor_actualizacion" id="inputFactorAct" class="form-control" value="1.000000" onchange="recalcularTotal()">
+                                <input type="text"  
+                                    name="factor_actualizacion" 
+                                    id="inputFactorAct" 
+                                    class="form-control" 
+                                    value="1,000000" 
+                                    oninput="recalcularTotal()" >
                             </div>
                             <div class="col-md-5">
                                 <label class="form-label fw-bold text-success">Monto Actualizado (Base)</label>
                                 <div class="input-group">
-                                    <span class="input-group-text bg-success text-white">$</span>
-                                    <input type="number" step="1" id="inputMontoActualizadoVisual" class="form-control fw-bold bg-white text-success" readonly>
+                                    <span class="input-group-text bg-success text-white fw-bold">$</span>
+                                    
+                                    <input type="text" 
+                                        id="inputMontoActualizadoVisual" 
+                                        class="form-control fw-bold bg-white text-success text-end" 
+                                        readonly 
+                                        placeholder="0">
+                                    
+                                    <button class="btn btn-outline-success" type="button" onclick="recalcularTotal()" title="Forzar cálculo manual">
+                                        <i class="bi bi-calculator-fill"></i> Calcular
+                                    </button>
                                 </div>
+                                <div class="form-text small text-muted">Si el monto no se actualiza, presione calcular.</div>
                             </div>
-
                             <div class="col-md-8">
                                 <label class="form-label">Descripción</label>
                                 <input type="text" name="descripcion" id="inputDescripcion" class="form-control">
@@ -231,11 +253,12 @@
                                             <div class="col-3">
                                                 <div class="input-group input-group-sm">
                                                     <span class="input-group-text text-success">$</span>
-                                                    <input type="number" step="0.01" 
+                                                    <input type="text" 
                                                         class="form-control input-monto-calculo text-end fw-bold" 
                                                         id="{{ factor.id }}" 
                                                         name="{{ factor.id }}" 
-                                                        placeholder="0">
+                                                        placeholder="0"
+                                                        oninput="formatearMiles(this)">
                                                 </div>
                                             </div>
 
@@ -486,42 +509,98 @@
     });
 
     function recalcularTotal() {
-        let hist = parseFloat(document.getElementById('inputMontoHistorico').value) || 0;
-        let fact = parseFloat(document.getElementById('inputFactorAct').value) || 1;
-        
-        // CÁLCULO: Redondear a cero decimales
+        // 1. Obtener valores
+        const inputHist = document.getElementById('inputMontoHistorico');
+        const inputFactor = document.getElementById('inputFactorAct');
+        const inputVisual = document.getElementById('inputMontoActualizadoVisual');
+
+        // 2. Limpieza de datos (Quitar puntos de miles para poder multiplicar)
+        // Si el campo está vacío, asumimos 0 o 1
+        let valHist = inputHist.value.replace(/\./g, "") || "0"; 
+        let valFactor = inputFactor.value.replace(",", ".") || "1"; // Cambiar coma por punto para JS
+
+        let hist = parseFloat(valHist);
+        let fact = parseFloat(valFactor);
+
+        // 3. Validación básica
+        if (isNaN(hist) || isNaN(fact)) {
+            inputVisual.value = "Error";
+            return;
+        }
+
+        // 4. Cálculo matemático (Redondeado)
         let total = Math.round(hist * fact);
+
+        // 5. Formateo visual (Poner puntos de miles de nuevo)
+        // Usamos Intl para formato chileno estándar
+        let totalFormateado = new Intl.NumberFormat('es-CL').format(total);
+
+        // 6. Asignar al input visual
+        inputVisual.value = totalFormateado;
         
-        // Guardamos el valor limpio en el input (o en un hidden si fuera necesario submitir)
-        // Pero para el visual readonly, usamos formato con puntos:
-        document.getElementById('inputMontoActualizadoVisual').value = formateadorPesos.format(total);
-        
-        // Guardamos el valor numérico real en un atributo data para usarlo en cálculos matemáticos
-        document.getElementById('inputMontoActualizadoVisual').dataset.valorReal = total;
+        // 7. Guardar valor real en dataset (para uso interno)
+        inputVisual.dataset.valorReal = total;
+
+        // Efecto visual opcional: Parpadeo verde para confirmar que calculó
+        inputVisual.classList.add("bg-success", "text-white");
+        inputVisual.classList.remove("bg-white", "text-success");
+        setTimeout(() => {
+            inputVisual.classList.remove("bg-success", "text-white");
+            inputVisual.classList.add("bg-white", "text-success");
+        }, 200);
     }
 
     function ejecutarCalculoMasivo() {
-        // Obtenemos la base desde el dataset (número limpio) o limpiando el formato visual
+        // 1. Obtener la Base (Monto Actualizado Total del Paso 1)
         let valVisual = document.getElementById('inputMontoActualizadoVisual').value;
-        // Quitamos puntos para poder dividir matemáticamente
         let base = parseFloat(valVisual.replace(/\./g, '')) || 0;
 
         if (base <= 0) {
-            alert("⚠️ El monto base es 0."); return;
+            alert("⚠️ El monto base es 0. Revise el Paso 1."); return;
         }
 
+        // ============================================================
+        // 🧠 LÓGICA AUTOMÁTICA 14A (F08 -> F25)
+        // ============================================================
+        // Buscamos el input sin importar si el ID es mayúscula o minúscula
+        const inputF08 = document.getElementById('f08') || document.getElementById('F08');
+        const inputF25 = document.getElementById('f25') || document.getElementById('F25');
+
+        if (inputF08 && inputF25) {
+            // Limpiamos puntos para obtener el número matemático
+            let montoF08 = parseFloat(inputF08.value.replace(/\./g, '')) || 0;
+
+            if (montoF08 > 0) {
+                // Cálculo del factor 14A: (0.27 / 0.73)
+                // Math.round para que no queden decimales feos
+                let montoF25 = Math.round(montoF08 * (0.27 / 0.73));
+
+                // Escribimos el resultado CON PUNTOS
+                inputF25.value = montoF25.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                
+                // Efecto visual: borde verde por 1 segundo
+                inputF25.classList.add('border-success', 'border-2');
+                setTimeout(() => inputF25.classList.remove('border-success', 'border-2'), 1000);
+            }
+        }
+        // ============================================================
+
+        // 2. Calcular Factores Decimales (Loop para todos los campos)
         const inputsMonto = document.querySelectorAll('.input-monto-calculo');
         let contador = 0;
 
         inputsMonto.forEach(input => {
-            let monto = parseFloat(input.value); // El input type="number" entrega valor limpio
+            // Obtenemos el valor limpio (sin puntos)
+            let monto = parseFloat(input.value.replace(/\./g, ''));
+            
+            // Buscamos su casilla "espejo" visual
             let idVisual = "visual_" + input.id;
             let inputVisual = document.getElementById(idVisual);
 
             if (inputVisual) {
                 if (!isNaN(monto) && monto >= 0) {
                     let factor = monto / base;
-                    inputVisual.value = factor.toFixed(8); // Factor mantiene decimales
+                    inputVisual.value = factor.toFixed(8); // Factor con 8 decimales
                     contador++;
                 } else {
                     inputVisual.value = "";
